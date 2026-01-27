@@ -137,3 +137,9 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+#claude ralph
+.claude/ralph/*
+.claude/ralph
+.claude/prd/*
+.claude/prd
