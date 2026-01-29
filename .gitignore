@@ -185,3 +185,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.env*.local
+
+# Backend data files (large, sensitive)
+backend/data/*.xlsx
+backend/data/*.xls
+backend/data/*.csv
+!backend/data/README.md
