@@ -6,40 +6,105 @@ An AI-powered search tool that helps BC high school students discover and plan t
 
 ```
 myedbc-course-explorer/
-├── frontend/          # Next.js landing page & search UI
-├── backend/           # API server (coming soon)
+├── frontend/          # Next.js 16 frontend (React, Tailwind CSS)
+│   ├── src/app/       # App router pages
+│   ├── src/lib/       # API client
+│   └── package.json   # Runs on port 3000
+├── backend/           # Next.js 14 API backend
+│   ├── src/app/api/   # API routes
+│   └── package.json   # Runs on port 3001
 ├── vercel.json        # Deployment configuration
 └── README.md
 ```
 
-## Frontend
+## Quick Start
 
-The frontend is a Next.js 16 application with Tailwind CSS.
+### 1. Backend Setup (Port 3001)
 
-### Getting Started
+```bash
+cd backend
+npm install
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env and add your Supabase credentials
+
+# Run the backend
+npm run dev
+```
+
+The backend API will be available at [http://localhost:3001](http://localhost:3001).
+
+### 2. Frontend Setup (Port 3000)
 
 ```bash
 cd frontend
 npm install
+
+# The frontend is pre-configured to connect to localhost:3001
+# You can customize this in .env.local if needed
+
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to view the landing page.
+Open [http://localhost:3000](http://localhost:3000) to view the application.
 
-### Tech Stack
+## Tech Stack
 
+### Frontend
 - Next.js 16 (App Router)
 - React 19
 - Tailwind CSS 4
 - TypeScript
 
-## Backend
+### Backend
+- Next.js 14
+- TypeScript
+- Supabase (PostgreSQL)
+- Zod validation
 
-Backend API for course search functionality. See [backend/README.md](backend/README.md) for details.
+## API Connection
+
+The frontend connects to the backend API using the configuration in `frontend/.env.local`:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3001
+```
+
+The API status is displayed in the bottom-right corner of the homepage.
 
 ## Deployment
 
-The frontend is deployed on Vercel at: https://myedbc-course-explorer.vercel.app
+### Quick Deploy
+
+Use the deployment script:
+
+```bash
+./deploy.sh
+```
+
+Choose from:
+1. Backend API only
+2. Frontend only
+3. Both (recommended for first deployment)
+
+### Manual Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
+
+### Environment Variables
+
+**Backend (Required):**
+- `SUPABASE_URL` - Your Supabase project URL
+- `SUPABASE_ANON_KEY` - Your Supabase anonymous key
+
+**Frontend (Required):**
+- `NEXT_PUBLIC_API_URL` - Your deployed backend URL
+
+### Live URLs
+
+- Frontend: https://myedbc-course-explorer.vercel.app
+- Backend API: Set this up during deployment
 
 ## License
 

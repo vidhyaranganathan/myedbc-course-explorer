@@ -4,6 +4,7 @@ import ExampleSearches from "@/components/example-searches";
 import TrustSection from "@/components/trust-section";
 import CTA from "@/components/cta";
 import Footer from "@/components/footer";
+import ApiStatus from "@/components/api-status";
 
 export default function Home() {
   return (
@@ -14,6 +15,7 @@ export default function Home() {
       <TrustSection />
       <CTA />
       <Footer />
+      <ApiStatus />
     </main>
   );
 }

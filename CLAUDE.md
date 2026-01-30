@@ -72,11 +72,17 @@ npm run lint     # Run ESLint
 
 ## Environment Variables
 
-### Backend (.env)
+### Backend (.env or Vercel)
 ```
 SUPABASE_URL=https://xxx.supabase.co
 SUPABASE_ANON_KEY=eyJ...
 SUPABASE_SERVICE_KEY=eyJ...  # Only for import script
+```
+
+### Frontend (.env.local or Vercel)
+```
+NEXT_PUBLIC_API_URL=http://localhost:3001  # Development
+NEXT_PUBLIC_API_URL=https://your-api.vercel.app  # Production
 ```
 
 ## Development Notes
@@ -85,6 +91,25 @@ SUPABASE_SERVICE_KEY=eyJ...  # Only for import script
 - Same course code can appear multiple times (different graduation programs)
 - Excel data file is gitignored - obtain from BC Ministry of Education
 - CORS is configured in `backend/next.config.mjs` for cross-origin API access
+
+## Deployment
+
+### Quick Deploy
+```bash
+./deploy.sh  # Interactive deployment script
+```
+
+### Architecture
+- **Backend**: Separate Vercel project (API server)
+- **Frontend**: Separate Vercel project (Web app)
+- Frontend connects to backend via `NEXT_PUBLIC_API_URL`
+
+### Deployment Order
+1. Deploy backend first
+2. Note the backend URL
+3. Deploy frontend with backend URL in environment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
 
 ## Code Conventions
 
