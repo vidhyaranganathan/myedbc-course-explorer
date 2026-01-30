@@ -103,8 +103,9 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
 
 ### Live URLs
 
-- Frontend: https://myedbc-course-explorer.vercel.app
-- Backend API: Set this up during deployment
+- **Frontend**: https://frontend-tau-orpin-67.vercel.app
+- **Backend API**: https://backend-opal-delta-67.vercel.app
+- **API Health Check**: https://backend-opal-delta-67.vercel.app/api/health
 
 ## License
 
