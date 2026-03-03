@@ -1,111 +1,37 @@
 # BC Course Finder
 
-An AI-powered search tool that helps BC high school students discover and plan their courses using official BC Ministry of Education data.
-
-## Project Structure
-
-```
-myedbc-course-explorer/
-├── frontend/          # Next.js 16 frontend (React, Tailwind CSS)
-│   ├── src/app/       # App router pages
-│   ├── src/lib/       # API client
-│   └── package.json   # Runs on port 3000
-├── backend/           # Next.js 14 API backend
-│   ├── src/app/api/   # API routes
-│   └── package.json   # Runs on port 3001
-├── vercel.json        # Deployment configuration
-└── README.md
-```
+Search and explore British Columbia's 12,741 courses. Helps students, parents, and educators find courses by grade, category, subject, language, and credits.
 
 ## Quick Start
 
-### 1. Backend Setup (Port 3001)
-
 ```bash
-cd backend
 npm install
-
-# Set up environment variables
-cp .env.example .env
-# Edit .env and add your Supabase credentials
-
-# Run the backend
 npm run dev
 ```
 
-The backend API will be available at [http://localhost:3001](http://localhost:3001).
+Open [http://localhost:3000](http://localhost:3000).
 
-### 2. Frontend Setup (Port 3000)
+## Updating Course Data
+
+When you get a new Excel file from the BC Ministry of Education:
 
 ```bash
-cd frontend
-npm install
-
-# The frontend is pre-configured to connect to localhost:3001
-# You can customize this in .env.local if needed
-
-npm run dev
+npm run import                              # reads from ~/Downloads/open_courses (1).xlsx
+npm run import -- /path/to/new-file.xlsx    # or specify a custom path
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to view the application.
+This regenerates `src/data/courses.json`. Commit and redeploy.
 
 ## Tech Stack
 
-### Frontend
-- Next.js 16 (App Router)
-- React 19
+- Next.js 16, React 19, TypeScript
 - Tailwind CSS 4
-- TypeScript
+- Client-side search (all 12,741 courses loaded in-browser)
+- Deployed on Vercel
 
-### Backend
-- Next.js 14
-- TypeScript
-- Supabase (PostgreSQL)
-- Zod validation
+## How It Works
 
-## API Connection
-
-The frontend connects to the backend API using the configuration in `frontend/.env.local`:
-
-```env
-NEXT_PUBLIC_API_URL=http://localhost:3001
-```
-
-The API status is displayed in the bottom-right corner of the homepage.
-
-## Deployment
-
-### Quick Deploy
-
-Use the deployment script:
-
-```bash
-./deploy.sh
-```
-
-Choose from:
-1. Backend API only
-2. Frontend only
-3. Both (recommended for first deployment)
-
-### Manual Deployment
-
-See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
-
-### Environment Variables
-
-**Backend (Required):**
-- `SUPABASE_URL` - Your Supabase project URL
-- `SUPABASE_ANON_KEY` - Your Supabase anonymous key
-
-**Frontend (Required):**
-- `NEXT_PUBLIC_API_URL` - Your deployed backend URL
-
-### Live URLs
-
-- **Frontend**: https://frontend-tau-orpin-67.vercel.app
-- **Backend API**: https://backend-opal-delta-67.vercel.app
-- **API Health Check**: https://backend-opal-delta-67.vercel.app/api/health
+All course data is stored as a static JSON file that ships with the app. When the page loads, the full dataset is available in the browser — search and filtering happen instantly with zero network requests.
 
 ## License
 

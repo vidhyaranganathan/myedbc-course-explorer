@@ -1,119 +1,71 @@
 # CLAUDE.md
 
-This file provides guidance for Claude when working with this repository.
-
 ## Project Overview
 
-BC Course Finder - A web application to search and explore British Columbia's 12,741 courses. Helps students, parents, and educators find courses by grade, category, subject, and more.
+BC Course Finder — a single-page Next.js app to search and explore British Columbia's 12,741 courses. All data is loaded client-side from a static JSON file. No database, no backend API.
 
 ## Project Structure
 
 ```
 myedbc-course-explorer/
-├── frontend/          # Next.js 16 frontend (React, Tailwind CSS)
-│   ├── src/app/       # App router pages
-│   └── package.json   # Runs on port 3000
-├── backend/           # Next.js 14 API backend
-│   ├── src/app/api/   # API routes
-│   ├── scripts/       # Import scripts
-│   ├── supabase/      # SQL migrations
-│   └── package.json   # Runs on port 3001
-└── CLAUDE.md
+├── scripts/
+│   └── convert-excel.ts   # Excel → JSON conversion
+├── src/
+│   ├── app/
+│   │   ├── layout.tsx     # Root layout
+│   │   ├── page.tsx       # Search page (single page app)
+│   │   ├── globals.css    # Tailwind + base styles
+│   │   └── api/import/    # Dev-only Excel upload endpoint
+│   ├── data/
+│   │   └── courses.json   # Generated from Excel (committed)
+│   └── lib/
+│       ├── search.ts      # Client-side filtering logic
+│       └── types.ts       # Course type definition
+├── package.json
+├── next.config.ts
+└── tsconfig.json
 ```
 
 ## Tech Stack
 
-- **Frontend**: Next.js 16, React 19, TypeScript, Tailwind CSS
-- **Backend**: Next.js 14, TypeScript, Zod validation
-- **Database**: Supabase (PostgreSQL)
-- **Deployment**: Vercel
+- **Framework**: Next.js 16, React 19, TypeScript
+- **Styling**: Tailwind CSS 4
+- **Data**: Static JSON (generated from Excel)
+- **Deployment**: Vercel (single project)
 
-## Common Commands
+## Commands
 
-### Frontend (port 3000)
 ```bash
-cd frontend
-npm run dev      # Start dev server
+npm run dev      # Start dev server (port 3000)
 npm run build    # Production build
 npm run lint     # Run ESLint
+npm run import   # Convert Excel → src/data/courses.json
 ```
 
-### Backend (port 3001)
-```bash
-cd backend
-npm run dev      # Start dev server
-npm run build    # Production build
-npm run import   # Import courses from Excel
-npm run lint     # Run ESLint
-```
+## Data Pipeline
 
-## API Endpoints
+1. Source: `~/Downloads/open_courses (1).xlsx` (BC Ministry of Education)
+2. Run `npm run import` to convert to `src/data/courses.json`
+3. JSON is committed to git and ships with the app
+4. Client loads all 12,741 courses and filters in-browser
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/health` | GET | Health check, returns course count |
-| `/api/courses/search` | GET | Search courses with filters (q, grade, category, language, subject, credits, limit, offset) |
-| `/api/courses/filters` | GET | Get filter options with counts |
-| `/api/courses/suggest` | GET | Autocomplete suggestions (q, limit) |
-| `/api/courses/[code]` | GET | Get course by code |
-| `/api/analytics/search` | POST | Log search analytics |
+Custom path: `npm run import -- /path/to/file.xlsx`
 
-## Database
+Dev-only upload: `POST /api/import` with multipart form file upload (blocked in production).
 
-- **Tables**: `courses`, `data_imports`, `search_logs`
-- **Migrations**: Located in `backend/supabase/migrations/`
-- **Data**: 12,741 courses imported from `backend/data/open_courses.xlsx`
+## Course Data Fields
 
-### Course Data Columns
-- code, grade, course_title, credit_value, category, language
-- myedbc_code, trax_code, developer, authorizer
-- open_date, close_date, grad_program, grad_program_requirement
-- hst_main_category, hst_sub_category, ministry_subject_code
+code, grade, title, credits, category, language, subject, subCategory, gradProgram, gradRequirement
 
-## Environment Variables
+## Architecture Decisions
 
-### Backend (.env or Vercel)
-```
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_ANON_KEY=eyJ...
-SUPABASE_SERVICE_KEY=eyJ...  # Only for import script
-```
-
-### Frontend (.env.local or Vercel)
-```
-NEXT_PUBLIC_API_URL=http://localhost:3001  # Development
-NEXT_PUBLIC_API_URL=https://your-api.vercel.app  # Production
-```
-
-## Development Notes
-
-- Backend uses lazy initialization for Supabase client to support builds without env vars
-- Same course code can appear multiple times (different graduation programs)
-- Excel data file is gitignored - obtain from BC Ministry of Education
-- CORS is configured in `backend/next.config.mjs` for cross-origin API access
-
-## Deployment
-
-### Quick Deploy
-```bash
-./deploy.sh  # Interactive deployment script
-```
-
-### Architecture
-- **Backend**: Separate Vercel project (API server)
-- **Frontend**: Separate Vercel project (Web app)
-- Frontend connects to backend via `NEXT_PUBLIC_API_URL`
-
-### Deployment Order
-1. Deploy backend first
-2. Note the backend URL
-3. Deploy frontend with backend URL in environment
-
-See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
+- **Client-side search**: 12K courses (~3.7 MB JSON) loads once, filtering is instant (<10ms)
+- **No database**: Data comes from a periodically updated Excel file, no need for a DB
+- **No separate backend**: Single Next.js app, no CORS, no API server
+- **xlsx in devDependencies**: Has unpatched vulns but only used in local import script
 
 ## Code Conventions
 
-- Use TypeScript strict mode
-- Validate API inputs with Zod schemas (`backend/src/lib/validation.ts`)
-- Handle errors via helpers in `backend/src/lib/errors.ts`
-- Database types defined in `backend/src/types/database.ts`
+- TypeScript strict mode
+- Tailwind CSS for all styling
+- Same course code can appear multiple times (different graduation programs)
