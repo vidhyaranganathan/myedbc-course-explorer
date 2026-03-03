@@ -2,26 +2,19 @@
 
 import { useState, useMemo } from "react";
 import coursesData from "@/data/courses.json";
-import descriptionsData from "@/data/category-descriptions.json";
+import courseDetailsData from "@/data/course-details.json";
 import type { Course } from "@/lib/types";
 import { filterCourses, getFilterOptions, emptyFilters, type Filters } from "@/lib/search";
 
-interface CategoryDescription {
-  subject: string;
-  subCategory: string;
-  subjectDescription: string;
-  subCategoryDescription: string;
+interface CourseDetail {
+  programGuideTitle?: string;
+  publishedDescription?: string;
+  genericCourseType?: string;
+  gradRequirements?: { program: string; requirement: string; examinable: string }[];
+  gradElectives?: string[];
 }
 
-const descriptionMap = new Map<string, CategoryDescription>();
-for (const d of descriptionsData as CategoryDescription[]) {
-  descriptionMap.set(`${d.subject}||${d.subCategory}`, d);
-}
-
-function getDescription(subject: string | null, subCategory: string | null): CategoryDescription | undefined {
-  if (!subject) return undefined;
-  return descriptionMap.get(`${subject}||${subCategory || ""}`);
-}
+const detailsMap = courseDetailsData as Record<string, CourseDetail>;
 
 const allCourses = coursesData as Course[];
 const HIGH_SCHOOL_GRADES = new Set(["09", "10", "11", "12"]);
@@ -255,22 +248,7 @@ export default function Home() {
                   </svg>
                 </button>
 
-                {isExpanded && (
-                  <div className="animate-slide-down px-4 sm:px-5 pb-4 border-t border-gray-100 pt-4">
-                    <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
-                      <Detail label="Course Code" value={course.code} />
-                      <Detail label="Grade" value={course.grade} />
-                      <Detail label="Credits" value={course.credits} />
-                      <Detail label="Category" value={course.category} />
-                      <Detail label="Language" value={course.language} />
-                      <Detail label="Subject" value={course.subject} />
-                      <Detail label="Sub-category" value={course.subCategory} />
-                      <Detail label="Grad Program" value={course.gradProgram} />
-                      <Detail label="Grad Requirement" value={course.gradRequirement} />
-                    </dl>
-                    <SubjectDescription subject={course.subject} subCategory={course.subCategory} />
-                  </div>
-                )}
+                {isExpanded && <CourseExpanded course={course} />}
               </div>
             );
           })}
@@ -338,22 +316,77 @@ function FilterSelect({
   );
 }
 
-function SubjectDescription({ subject, subCategory }: { subject: string | null; subCategory: string | null }) {
-  const desc = getDescription(subject, subCategory);
-  if (!desc || (!desc.subjectDescription && !desc.subCategoryDescription)) return null;
+function CourseExpanded({ course }: { course: Course }) {
+  const detail = detailsMap[course.code] || {};
 
   return (
-    <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
-      {desc.subjectDescription && (
-        <div className="text-xs text-gray-500">
-          <span className="font-medium text-gray-600">{desc.subject}:</span>{" "}
-          {desc.subjectDescription}
+    <div className="animate-slide-down px-4 sm:px-5 pb-4 border-t border-gray-100 pt-4 space-y-4">
+      {/* Published Description */}
+      {detail.publishedDescription && (
+        <div className="bg-blue-50 rounded-lg px-4 py-3">
+          <p className="text-sm text-gray-800 leading-relaxed">{detail.publishedDescription}</p>
         </div>
       )}
-      {desc.subCategoryDescription && (
-        <div className="text-xs text-gray-500">
-          <span className="font-medium text-gray-600">{desc.subCategory}:</span>{" "}
-          {desc.subCategoryDescription}
+
+      {/* Program Guide Title */}
+      {detail.programGuideTitle && (
+        <div className="text-sm">
+          <span className="text-[11px] uppercase tracking-wider text-gray-400 font-medium">Program Guide Title</span>
+          <p className="text-gray-900 mt-0.5">{detail.programGuideTitle}</p>
+        </div>
+      )}
+
+      {/* Basic Details */}
+      <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
+        <Detail label="Course Code" value={course.code} />
+        <Detail label="Grade" value={course.grade} />
+        <Detail label="Credits" value={course.credits} />
+        <Detail label="Category" value={course.category} />
+        <Detail label="Language" value={course.language} />
+        <Detail label="Subject" value={course.subject} />
+        <Detail label="Sub-category" value={course.subCategory} />
+        <Detail label="Grad Program" value={course.gradProgram} />
+        <Detail label="Grad Requirement" value={course.gradRequirement} />
+      </dl>
+
+      {/* Grad Program Requirements */}
+      {detail.gradRequirements && detail.gradRequirements.length > 0 && (
+        <div>
+          <h4 className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-2">Graduation Program Requirements</h4>
+          <div className="rounded-lg border border-gray-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 text-left">
+                  <th className="px-3 py-1.5 text-xs font-medium text-gray-500">Program</th>
+                  <th className="px-3 py-1.5 text-xs font-medium text-gray-500">Requirement</th>
+                  <th className="px-3 py-1.5 text-xs font-medium text-gray-500">Examinable</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.gradRequirements.map((r, i) => (
+                  <tr key={i} className="border-t border-gray-100">
+                    <td className="px-3 py-1.5 text-gray-900">{r.program}</td>
+                    <td className="px-3 py-1.5 text-gray-700">{r.requirement}</td>
+                    <td className="px-3 py-1.5 text-gray-700">{r.examinable}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Grad Program Electives */}
+      {detail.gradElectives && detail.gradElectives.length > 0 && (
+        <div>
+          <h4 className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-1.5">Counts as Elective In</h4>
+          <div className="flex flex-wrap gap-1.5">
+            {detail.gradElectives.map((e, i) => (
+              <span key={i} className="inline-flex px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
+                {e}
+              </span>
+            ))}
+          </div>
         </div>
       )}
     </div>
