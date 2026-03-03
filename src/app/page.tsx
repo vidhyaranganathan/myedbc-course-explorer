@@ -5,9 +5,10 @@ import coursesData from "@/data/courses.json";
 import type { Course } from "@/lib/types";
 import { filterCourses, getFilterOptions, emptyFilters, type Filters } from "@/lib/search";
 
-const courses = coursesData as Course[];
-const PAGE_SIZE = 50;
+const allCourses = coursesData as Course[];
 const HIGH_SCHOOL_GRADES = new Set(["09", "10", "11", "12"]);
+const courses = allCourses.filter((c) => HIGH_SCHOOL_GRADES.has(c.grade));
+const PAGE_SIZE = 50;
 
 const CATEGORY_INFO: Record<string, { color: string; bg: string; description: string }> = {
   "External Credential": {
@@ -49,17 +50,8 @@ export default function Home() {
   const paged = results.slice(0, (page + 1) * PAGE_SIZE);
   const hasMore = paged.length < results.length;
 
-  const isHighSchoolGrade = !filters.grade || HIGH_SCHOOL_GRADES.has(filters.grade);
-
   function update(key: keyof Filters, value: string) {
-    setFilters((f) => {
-      const next = { ...f, [key]: value };
-      // Clear credits filter when switching to non-high-school grade
-      if (key === "grade" && value && !HIGH_SCHOOL_GRADES.has(value)) {
-        next.credits = "";
-      }
-      return next;
-    });
+    setFilters((f) => ({ ...f, [key]: value }));
     setPage(0);
     setExpanded(null);
   }
@@ -111,7 +103,7 @@ export default function Home() {
               ))}
             </div>
             <p className="text-xs text-gray-500 mt-3">
-              <strong>Credits</strong> indicate how many credits a course earns toward graduation (Grades 9-12 only).
+              <strong>Credits</strong> indicate how many credits a course earns toward graduation.
             </p>
           </div>
         )}
@@ -143,7 +135,7 @@ export default function Home() {
             />
           </div>
 
-          <div className={`grid grid-cols-2 gap-3 mt-3 ${isHighSchoolGrade ? "md:grid-cols-5" : "md:grid-cols-4"}`}>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-3">
             <FilterSelect
               label="Grade"
               value={filters.grade}
@@ -169,15 +161,13 @@ export default function Home() {
               options={filterOptions.subjects}
               onChange={(v) => update("subject", v)}
             />
-            {isHighSchoolGrade && (
-              <FilterSelect
+            <FilterSelect
                 label="Credits"
                 value={filters.credits}
                 options={filterOptions.credits}
                 onChange={(v) => update("credits", v)}
                 formatOption={(v) => `${v} credits`}
               />
-            )}
           </div>
 
           {hasFilters && (
@@ -206,7 +196,6 @@ export default function Home() {
             const key = `${course.code}-${course.gradProgram}-${i}`;
             const isExpanded = expanded === key;
             const badge = getCategoryBadge(course.category);
-            const showCredits = HIGH_SCHOOL_GRADES.has(course.grade);
 
             return (
               <div
@@ -231,7 +220,7 @@ export default function Home() {
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-xs font-medium ${badge.color} ${badge.bg}`}>
                         {course.category}
                       </span>
-                      {showCredits && course.credits && (
+                      {course.credits && (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-600">
                           {course.credits} cr
                         </span>
@@ -253,7 +242,7 @@ export default function Home() {
                     <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
                       <Detail label="Course Code" value={course.code} />
                       <Detail label="Grade" value={course.grade} />
-                      {showCredits && <Detail label="Credits" value={course.credits} />}
+                      <Detail label="Credits" value={course.credits} />
                       <Detail label="Category" value={course.category} />
                       <Detail label="Language" value={course.language} />
                       <Detail label="Subject" value={course.subject} />
