@@ -16,9 +16,35 @@ interface CourseDetail {
 
 const detailsMap = courseDetailsData as Record<string, CourseDetail>;
 
+interface DeduplicatedCourse extends Omit<Course, "gradProgram" | "gradRequirement"> {
+  gradPrograms: { program: string; requirement: string }[];
+}
+
 const allCourses = coursesData as Course[];
 const HIGH_SCHOOL_GRADES = new Set(["09", "10", "11", "12"]);
-const courses = allCourses.filter((c) => HIGH_SCHOOL_GRADES.has(c.grade));
+
+// Deduplicate: same course appears multiple times for different grad programs
+const courses: DeduplicatedCourse[] = (() => {
+  const filtered = allCourses.filter((c) => HIGH_SCHOOL_GRADES.has(c.grade));
+  const map = new Map<string, DeduplicatedCourse>();
+  for (const c of filtered) {
+    const key = `${c.code}|${c.grade}`;
+    const existing = map.get(key);
+    if (existing) {
+      if (c.gradProgram) {
+        existing.gradPrograms.push({ program: c.gradProgram, requirement: c.gradRequirement || "" });
+      }
+    } else {
+      const { gradProgram, gradRequirement, ...rest } = c;
+      map.set(key, {
+        ...rest,
+        gradPrograms: gradProgram ? [{ program: gradProgram, requirement: gradRequirement || "" }] : [],
+      });
+    }
+  }
+  return Array.from(map.values());
+})();
+
 const PAGE_SIZE = 50;
 
 const CATEGORY_INFO: Record<string, { color: string; bg: string; description: string }> = {
@@ -204,7 +230,7 @@ export default function Home() {
         {/* Results */}
         <div className="space-y-2">
           {paged.map((course, i) => {
-            const key = `${course.code}-${course.gradProgram}-${i}`;
+            const key = `${course.code}-${course.grade}`;
             const isExpanded = expanded === key;
             const badge = getCategoryBadge(course.category);
 
@@ -316,7 +342,7 @@ function FilterSelect({
   );
 }
 
-function CourseExpanded({ course }: { course: Course }) {
+function CourseExpanded({ course }: { course: DeduplicatedCourse }) {
   const detail = detailsMap[course.code] || {};
 
   return (
@@ -345,9 +371,38 @@ function CourseExpanded({ course }: { course: Course }) {
         <Detail label="Language" value={course.language} />
         <Detail label="Subject" value={course.subject} />
         <Detail label="Sub-category" value={course.subCategory} />
-        <Detail label="Grad Program" value={course.gradProgram} />
-        <Detail label="Grad Requirement" value={course.gradRequirement} />
+        {course.gradPrograms.length === 1 && (
+          <>
+            <Detail label="Grad Program" value={course.gradPrograms[0].program} />
+            <Detail label="Grad Requirement" value={course.gradPrograms[0].requirement} />
+          </>
+        )}
       </dl>
+
+      {/* Multiple Grad Programs */}
+      {course.gradPrograms.length > 1 && (
+        <div>
+          <h4 className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-2">Graduation Programs</h4>
+          <div className="rounded-lg border border-gray-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 text-left">
+                  <th className="px-3 py-1.5 text-xs font-medium text-gray-500">Program</th>
+                  <th className="px-3 py-1.5 text-xs font-medium text-gray-500">Requirement</th>
+                </tr>
+              </thead>
+              <tbody>
+                {course.gradPrograms.map((gp, i) => (
+                  <tr key={i} className="border-t border-gray-100">
+                    <td className="px-3 py-1.5 text-gray-900">{gp.program}</td>
+                    <td className="px-3 py-1.5 text-gray-700">{gp.requirement}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Grad Program Requirements */}
       {detail.gradRequirements && detail.gradRequirements.length > 0 && (

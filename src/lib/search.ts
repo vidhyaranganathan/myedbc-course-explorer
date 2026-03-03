@@ -1,5 +1,3 @@
-import type { Course } from "./types";
-
 export interface Filters {
   query: string;
   grade: string;
@@ -18,7 +16,17 @@ export const emptyFilters: Filters = {
   credits: "",
 };
 
-export function filterCourses(courses: Course[], filters: Filters): Course[] {
+interface Searchable {
+  code: string;
+  grade: string;
+  title: string;
+  credits: string | null;
+  category: string;
+  language: string;
+  subject: string | null;
+}
+
+export function filterCourses<T extends Searchable>(courses: T[], filters: Filters): T[] {
   const q = filters.query.toLowerCase();
 
   return courses.filter((c) => {
@@ -34,7 +42,7 @@ export function filterCourses(courses: Course[], filters: Filters): Course[] {
   });
 }
 
-export function getFilterOptions(courses: Course[]) {
+export function getFilterOptions<T extends Searchable>(courses: T[]) {
   const count = (arr: (string | null)[]) => {
     const map = new Map<string, number>();
     for (const v of arr) {
