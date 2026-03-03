@@ -2,8 +2,26 @@
 
 import { useState, useMemo } from "react";
 import coursesData from "@/data/courses.json";
+import descriptionsData from "@/data/category-descriptions.json";
 import type { Course } from "@/lib/types";
 import { filterCourses, getFilterOptions, emptyFilters, type Filters } from "@/lib/search";
+
+interface CategoryDescription {
+  subject: string;
+  subCategory: string;
+  subjectDescription: string;
+  subCategoryDescription: string;
+}
+
+const descriptionMap = new Map<string, CategoryDescription>();
+for (const d of descriptionsData as CategoryDescription[]) {
+  descriptionMap.set(`${d.subject}||${d.subCategory}`, d);
+}
+
+function getDescription(subject: string | null, subCategory: string | null): CategoryDescription | undefined {
+  if (!subject) return undefined;
+  return descriptionMap.get(`${subject}||${subCategory || ""}`);
+}
 
 const allCourses = coursesData as Course[];
 const HIGH_SCHOOL_GRADES = new Set(["09", "10", "11", "12"]);
@@ -250,6 +268,7 @@ export default function Home() {
                       <Detail label="Grad Program" value={course.gradProgram} />
                       <Detail label="Grad Requirement" value={course.gradRequirement} />
                     </dl>
+                    <SubjectDescription subject={course.subject} subCategory={course.subCategory} />
                   </div>
                 )}
               </div>
@@ -316,6 +335,28 @@ function FilterSelect({
         </option>
       ))}
     </select>
+  );
+}
+
+function SubjectDescription({ subject, subCategory }: { subject: string | null; subCategory: string | null }) {
+  const desc = getDescription(subject, subCategory);
+  if (!desc || (!desc.subjectDescription && !desc.subCategoryDescription)) return null;
+
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+      {desc.subjectDescription && (
+        <div className="text-xs text-gray-500">
+          <span className="font-medium text-gray-600">{desc.subject}:</span>{" "}
+          {desc.subjectDescription}
+        </div>
+      )}
+      {desc.subCategoryDescription && (
+        <div className="text-xs text-gray-500">
+          <span className="font-medium text-gray-600">{desc.subCategory}:</span>{" "}
+          {desc.subCategoryDescription}
+        </div>
+      )}
+    </div>
   );
 }
 
