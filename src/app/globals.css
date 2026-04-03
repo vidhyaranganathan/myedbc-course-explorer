@@ -34,8 +34,8 @@ button {
 
 /* Animate expand/collapse */
 @keyframes slideDown {
-  from { opacity: 0; max-height: 0; }
-  to { opacity: 1; max-height: 2000px; }
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes fadeIn {
@@ -44,8 +44,7 @@ button {
 }
 
 .animate-slide-down {
-  animation: slideDown 0.25s ease-out forwards;
-  overflow: hidden;
+  animation: slideDown 0.2s ease-out forwards;
 }
 
 .animate-fade-in {
