@@ -12,8 +12,8 @@ BC Course Finder — a single-page Next.js app to search and explore British Col
 myedbc-course-explorer/
 ├── docs/                 # Onboarding, architecture, ADRs, roadmap
 ├── .claude/
-│   └── commands/
-│       └── adr.md        # /adr slash command to create decision records
+│   ├── skills/            # /adr, /backlog, /docs-audit, /gen-test
+│   └── agents/            # code-reviewer subagent
 ├── scripts/
 │   ├── convert-excel.ts          # Excel → JSON conversion
 │   └── scrape-course-details.py  # Scrapes per-course details from BC Course Registry
@@ -84,11 +84,12 @@ Dev-only upload: `POST /api/import` with multipart form file upload (blocked in 
 
 See `docs/` for onboarding guides, architecture overview, decision records, and roadmap.
 
-## Custom Commands
+## Skills
 
 - `/adr <topic>` — Auto-generate an Architecture Decision Record in `docs/decisions/`
 - `/docs-audit` — Audit all docs against the codebase, find stale content, and offer to fix it
 - `/gen-test <file>` — Generate tests for a source file following project patterns
+- `/backlog <description>` — Auto-routes to roadmap, tech-debt, or agentic-workflows based on content
 
 ## Code Conventions
 

@@ -16,11 +16,8 @@ Welcome to BC Course Finder! This guide will get you up and running.
 git clone <repo-url>
 cd myedbc-course-explorer
 
-# Install dependencies
+# Install dependencies (automatically enables pre-push hook)
 npm install
-
-# Enable git hooks (pre-push runs lint + test + build)
-git config core.hooksPath .githooks
 
 # Start the dev server
 npm run dev

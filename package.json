@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "import": "tsx scripts/convert-excel.ts"
+    "import": "tsx scripts/convert-excel.ts",
+    "prepare": "git config core.hooksPath .githooks"
   },
   "dependencies": {
     "next": "^16.2.2",

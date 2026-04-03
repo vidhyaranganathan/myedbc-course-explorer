@@ -1,3 +1,8 @@
+---
+name: docs-audit
+description: Audit all documentation against the current codebase state, find stale content, and fix it
+---
+
 Audit all documentation in this repo against the current codebase state. Find and fix anything stale.
 
 ## Scope
@@ -52,13 +57,13 @@ Produce a report in this format:
 ```
 ## Docs Audit Report
 
-### ✅ Up to date
+### Up to date
 - [list files that are accurate]
 
-### ⚠️ Stale (needs update)
+### Stale (needs update)
 - **file.md**: what's wrong → what it should say
 
-### 🗑️ Resolved items
+### Resolved items
 - **roadmap.md**: "item X" has been implemented (evidence: file.ts)
 - **tech-debt.md**: "item Y" has been resolved (evidence: file.ts)
 ```

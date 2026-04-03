@@ -13,6 +13,12 @@ export default defineConfig({
       reporter: ["text", "text-summary", "html"],
       include: ["src/lib/**", "src/app/**"],
       exclude: ["src/__tests__/**", "src/data/**"],
+      thresholds: {
+        statements: 75,
+        branches: 75,
+        functions: 75,
+        lines: 75,
+      },
     },
   },
   resolve: {

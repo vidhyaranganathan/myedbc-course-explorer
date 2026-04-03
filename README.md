@@ -9,8 +9,7 @@ Search and explore British Columbia's high school courses. Helps students, paren
 ```bash
 git clone git@github.com:vidhyaranganathan/myedbc-course-explorer.git
 cd myedbc-course-explorer
-npm install
-git config core.hooksPath .githooks   # enables pre-push checks
+npm install    # automatically enables pre-push hook
 npm run dev
 ```
 

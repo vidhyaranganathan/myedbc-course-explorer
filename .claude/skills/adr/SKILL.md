@@ -1,3 +1,8 @@
+---
+name: adr
+description: Create Architecture Decision Records when a technical decision is being made or discussed
+---
+
 Create a new Architecture Decision Record (ADR) for this project.
 
 The user's decision topic: $ARGUMENTS

@@ -1,3 +1,8 @@
+---
+name: gen-test
+description: Generate tests for source files following the project's established Vitest + React Testing Library patterns
+---
+
 Generate tests for a source file following the project's established testing patterns.
 
 Target file: $ARGUMENTS

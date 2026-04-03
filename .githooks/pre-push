@@ -13,8 +13,8 @@ if [ $? -ne 0 ]; then
 fi
 
 echo ""
-echo "── Tests ──"
-npm run test
+echo "── Tests + Coverage ──"
+npm run test:coverage
 if [ $? -ne 0 ]; then
   echo "❌ Tests failed. Push aborted."
   exit 1
