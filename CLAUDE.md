@@ -90,6 +90,7 @@ See `docs/` for onboarding guides, architecture overview, decision records, and 
 - `/docs-audit` — Audit all docs against the codebase, find stale content, and offer to fix it
 - `/gen-test <file>` — Generate tests for a source file following project patterns
 - `/backlog <description>` — Auto-routes to roadmap, tech-debt, or agentic-workflows based on content
+- `/backlog-sweep` — Scans tracking files and closes items that are done (auto-triggers on "done"/"shipped")
 
 ## Code Conventions
 

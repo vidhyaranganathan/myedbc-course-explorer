@@ -54,6 +54,7 @@ PR opened
 |-------|-------------|------------------|
 | `/adr` | Creates Architecture Decision Records | Auto-triggers when decision language is detected ("let's use X instead of Y", "the tradeoff is...") |
 | `/backlog` | Adds items to tracking files | Auto-routes to roadmap, tech-debt, or agentic-workflows based on content |
+| `/backlog-sweep` | Closes completed backlog items | Auto-triggers when you say "done", "finished", or "shipped". Checks codebase for evidence before closing |
 | `/gen-test` | Generates tests for a file | Use when adding new code. Follows project test patterns |
 | `/docs-audit` | Audits docs against codebase | Use periodically. Also runs weekly via GitHub Actions |
 
@@ -110,11 +111,12 @@ Work is tracked in three files under `docs/roadmap/`:
 
 | File | What goes in it | ID prefix |
 |------|----------------|-----------|
-| [roadmap.md](docs/roadmap/roadmap.md) | Product features | R-NNN |
-| [tech-debt.md](docs/roadmap/tech-debt.md) | Code/design issues | TD-NNN |
-| [agentic-workflows.md](docs/roadmap/agentic-workflows.md) | Automation ideas | AW-NNN |
+| [roadmap.md](docs/roadmap/roadmap.md) | Product features | R-NNN | `Planned` → `In Progress` → `Done` |
+| [tech-debt.md](docs/roadmap/tech-debt.md) | Code/design issues | TD-NNN | `Open` → `In Progress` → `Resolved` |
+| [agentic-workflows.md](docs/roadmap/agentic-workflows.md) | Automation ideas | AW-NNN | `Idea` → `Planned` → `Implemented` |
 
-Use `/backlog <description>` to add items — it auto-routes to the right file.
+- `/backlog <description>` — adds items, auto-routes to the right file
+- `/backlog-sweep` — scans for completed items and closes them (checks codebase for evidence)
 
 ## Running Tests
 

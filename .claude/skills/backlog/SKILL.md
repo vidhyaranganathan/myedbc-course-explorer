@@ -22,7 +22,7 @@ Input: $ARGUMENTS
 2. **Auto-assign priority/section** based on urgency signals in the description:
    - Roadmap: Near-Term (quick wins, dependencies for other work), Medium-Term (significant effort), Long-Term (exploratory)
    - Tech Debt: High (blocks other work or affects users), Medium (improves quality), Low (nice to have)
-   - Agentic: Active (already running), Planned (ready to build), Idea (exploratory)
+   - Agentic: Implemented (deployed and running), Planned (ready to build), Idea (exploratory)
 
 3. **Read the target file** to find the last used ID and increment it.
 
@@ -34,7 +34,7 @@ Input: $ARGUMENTS
 5. **Add the row** to the correct table in the correct section with status:
    - Roadmap: `Planned` | `In Progress` | `Done`
    - Tech Debt: `Open` | `In Progress` | `Resolved`
-   - Agentic Workflows: `Idea` | `Planned` | `Active`
+   - Agentic Workflows: `Idea` | `Planned` | `Implemented`
 
 6. **Confirm** with a one-liner: what was added, the ID, which file, which section.
 

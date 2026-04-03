@@ -12,6 +12,7 @@ For product features see [roadmap.md](roadmap.md). For automation ideas see [age
 | TD-002 | Move types to types.ts | `CourseDetail` and `DeduplicatedCourse` are inline in page.tsx but used as project-wide conventions | Unassigned | Open |
 | TD-003 | Consolidate duplicated Excel transform | `clean()` and `transformRow()` copy-pasted between `scripts/convert-excel.ts` and `src/app/api/import/route.ts` | Unassigned | Open |
 | TD-004 | Accessibility audit and fixes | No skip-to-content link, no `<label>` on dropdowns, no `aria-expanded` on course cards, no keyboard nav, no `aria-live` for result counts, color contrast unaudited, decorative SVGs lack `aria-hidden` | Unassigned | Open |
+| TD-012 | Add E2E tests | No end-to-end tests exist. Set up Playwright to cover critical user flows: page load, search, filter, expand course, clear filters, load more pagination, empty state | Unassigned | Open |
 
 ## Medium Priority
 
@@ -21,6 +22,7 @@ For product features see [roadmap.md](roadmap.md). For automation ideas see [age
 | TD-006 | Deduplicate SVG icons | Close icon and search icon each appear twice in page.tsx. Extract into icon components or constants | Unassigned | Open |
 | TD-007 | Memoize card list for expand/collapse | Each `setExpanded` re-renders entire 50-item list. Extract card into `React.memo`-wrapped component | Unassigned | Open |
 | TD-008 | Pre-filter JSON at build time | `courses.json` ships all 12K rows including K-8. Pre-filter during import to cut size | Unassigned | Open |
+| TD-013 | Evaluate scraper approach | Current scraper uses curl + regex HTML parsing — fragile and misses 951 courses. Evaluate alternatives: Playwright browser automation (renders JS, handles sessions natively), Cheerio/JSDOM for structured parsing, or an official BC API if one exists. Consider also scraping the BC curriculum site as a secondary source for missing descriptions | Unassigned | Open |
 
 ## Low Priority
 
