@@ -92,13 +92,22 @@ See the [`docs/`](docs/) folder for:
 - [Decision Records](docs/decisions/) — why things are built this way
 - [Roadmap](docs/roadmap/roadmap.md) — what's planned next
 
+## Development Automation
+
+This repo uses **agent-assisted development** with Claude Code. Automation runs at every stage:
+
+| Stage | What runs automatically |
+|-------|------------------------|
+| **On edit** | Auto-lint, auto-test, architecture drift detection, data file guard |
+| **On push** | Pre-push hook: lint + test + coverage (75% floor) + build |
+| **On PR** | CI pipeline + code reviewer subagent |
+| **Weekly** | Docs audit checks for stale documentation |
+
+Skills available: `/adr` (auto-triggers on decisions), `/backlog` (auto-routes items), `/gen-test`, `/docs-audit`
+
 ## Contributing
 
-1. Create a branch from `main`
-2. Make your changes
-3. The pre-push hook runs lint + test + build automatically
-4. CI runs the same checks on your PR
-5. For architectural changes, write a [Decision Record](docs/decisions/template.md) first
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development workflow, including how the automation works and what to expect.
 
 ## License
 

@@ -12,6 +12,7 @@ For product features see [roadmap.md](roadmap.md). For code issues see [tech-deb
 | AW-002 | Auto-test on edit | PostToolUse hook runs Vitest after search.ts/page.tsx edits | Vidhya | Active |
 | AW-003 | Block data file edits | PreToolUse hook prevents direct edits to `src/data/*.json` | Vidhya | Active |
 | AW-004 | Pre-push checks | Git hook runs lint + test + coverage + build before push | Vidhya | Active |
+| AW-015 | Architecture drift detector | PreToolUse prompt hook (Haiku) reads ADRs and flags code changes that contradict existing decisions | Vidhya | Active |
 | AW-005 | CI pipeline | GitHub Actions: lint, build, test with coverage on push/PR | Vidhya | Active |
 | AW-006 | Weekly docs audit | GitHub Actions runs Monday 9am UTC, checks for doc drift | Vidhya | Active |
 
