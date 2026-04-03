@@ -1,0 +1,75 @@
+name: Docs Audit
+
+on:
+  # Run weekly on Monday mornings
+  schedule:
+    - cron: "0 9 * * 1"
+  # Also allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check doc versions against package.json
+        run: |
+          echo "## Docs Audit" >> $GITHUB_STEP_SUMMARY
+
+          # Extract actual versions
+          NEXT_VER=$(node -e "console.log(require('./package.json').dependencies.next.replace('^',''))")
+          TS_VER=$(node -e "console.log(require('./package.json').devDependencies.typescript.replace('^',''))")
+          TW_VER=$(node -e "console.log(require('./package.json').devDependencies.tailwindcss.replace('^',''))")
+
+          echo "### Package versions" >> $GITHUB_STEP_SUMMARY
+          echo "- Next.js: $NEXT_VER" >> $GITHUB_STEP_SUMMARY
+          echo "- TypeScript: $TS_VER" >> $GITHUB_STEP_SUMMARY
+          echo "- Tailwind: $TW_VER" >> $GITHUB_STEP_SUMMARY
+
+          ISSUES=0
+
+          # Check tech-stack.md for version drift
+          if ! grep -q "$(echo $TS_VER | cut -d. -f1)" docs/architecture/tech-stack.md 2>/dev/null; then
+            echo "- ⚠️ tech-stack.md: TypeScript major version mismatch" >> $GITHUB_STEP_SUMMARY
+            ISSUES=$((ISSUES + 1))
+          fi
+
+          # Check data counts
+          COURSES=$(node -e "console.log(require('./src/data/courses.json').length)")
+          DETAILS=$(node -e "console.log(Object.keys(require('./src/data/course-details.json')).length)")
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Data counts" >> $GITHUB_STEP_SUMMARY
+          echo "- courses.json: $COURSES entries" >> $GITHUB_STEP_SUMMARY
+          echo "- course-details.json: $DETAILS entries" >> $GITHUB_STEP_SUMMARY
+
+          # Check for stale counts in docs
+          if grep -r "12,741\|12741" docs/ CLAUDE.md 2>/dev/null | grep -v "12,741 rows\|12741 rows" | grep -v tech-debt; then
+            echo "- ⚠️ Hardcoded course count found in docs" >> $GITHUB_STEP_SUMMARY
+            ISSUES=$((ISSUES + 1))
+          fi
+
+          # Check documented scripts match package.json
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Scripts" >> $GITHUB_STEP_SUMMARY
+          node -e "Object.keys(require('./package.json').scripts).forEach(s => console.log('- ' + s))" >> $GITHUB_STEP_SUMMARY
+
+          # Check structure drift — new top-level src dirs not in CLAUDE.md
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Structure check" >> $GITHUB_STEP_SUMMARY
+          for dir in src/*/; do
+            dirname=$(basename "$dir")
+            if ! grep -q "$dirname" CLAUDE.md 2>/dev/null; then
+              echo "- ⚠️ Directory $dir not in CLAUDE.md structure tree" >> $GITHUB_STEP_SUMMARY
+              ISSUES=$((ISSUES + 1))
+            fi
+          done
+
+          if [ $ISSUES -eq 0 ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### ✅ All checks passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### ⚠️ $ISSUES issue(s) found — run \`/docs-audit\` in Claude Code to investigate and fix" >> $GITHUB_STEP_SUMMARY
+          fi

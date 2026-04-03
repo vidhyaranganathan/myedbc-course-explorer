@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+## **⚠️ IMPORTANT: This project runs on Vercel Hobby (free tier). Only use features available on the Hobby plan. No Pro/Enterprise features (Analytics, Speed Insights, Firewall, Edge Config, Cron Jobs, etc.). Keep it simple.**
+
 ## Project Overview
 
 BC Course Finder — a single-page Next.js app to search and explore British Columbia's K-12 courses. UI filters to grades 9-12 only. All data is loaded client-side from static JSON files. No database, no backend API.
@@ -8,6 +10,10 @@ BC Course Finder — a single-page Next.js app to search and explore British Col
 
 ```
 myedbc-course-explorer/
+├── docs/                 # Onboarding, architecture, ADRs, roadmap
+├── .claude/
+│   └── commands/
+│       └── adr.md        # /adr slash command to create decision records
 ├── scripts/
 │   ├── convert-excel.ts          # Excel → JSON conversion
 │   └── scrape-course-details.py  # Scrapes per-course details from BC Course Registry
@@ -30,7 +36,7 @@ myedbc-course-explorer/
 
 ## Tech Stack
 
-- **Framework**: Next.js 16, React 19, TypeScript
+- **Framework**: Next.js 16, React 19, TypeScript 6
 - **Styling**: Tailwind CSS 4
 - **Data**: Static JSON (generated from Excel + scraped details)
 - **Deployment**: Vercel (single project)
@@ -41,6 +47,8 @@ myedbc-course-explorer/
 npm run dev      # Start dev server (port 3000)
 npm run build    # Production build
 npm run lint     # Run ESLint
+npm run test     # Run tests (Vitest)
+npm run test:coverage  # Run tests with coverage report
 npm run import   # Convert Excel → src/data/courses.json
 python3 scripts/scrape-course-details.py  # Scrape course details (resumes automatically)
 ```
@@ -71,6 +79,16 @@ Dev-only upload: `POST /api/import` with multipart form file upload (blocked in 
 - **No separate backend**: Single Next.js app, no CORS, no API server
 - **xlsx in devDependencies**: Has unpatched vulns but only used in local import script
 - **Grades 9-12 only**: Source data has all grades K-12 but UI filters to high school only
+
+## Documentation
+
+See `docs/` for onboarding guides, architecture overview, decision records, and roadmap.
+
+## Custom Commands
+
+- `/adr <topic>` — Auto-generate an Architecture Decision Record in `docs/decisions/`
+- `/docs-audit` — Audit all docs against the codebase, find stale content, and offer to fix it
+- `/gen-test <file>` — Generate tests for a source file following project patterns
 
 ## Code Conventions
 

@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "BC Course Finder",
-  description: "Search and explore British Columbia's 12,741 courses",
+  description: "Search and explore British Columbia's high school courses",
 };
 
 export default function RootLayout({
