@@ -1,7 +1,7 @@
 # BC Course Finder
 
 [![CI](https://github.com/vidhyaranganathan/myedbc-course-explorer/actions/workflows/ci.yml/badge.svg)](https://github.com/vidhyaranganathan/myedbc-course-explorer/actions/workflows/ci.yml)
-![Coverage](https://raw.githubusercontent.com/vidhyaranganathan/myedbc-course-explorer/main/.github/badges/coverage.svg)
+[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/vidhyaranganathan/myedbc-course-explorer/main/.github/badges/coverage.json)](https://github.com/vidhyaranganathan/myedbc-course-explorer/actions/workflows/ci.yml)
 
 Search and explore British Columbia's high school courses. Helps students, parents, and educators find courses by grade, category, subject, language, and credits.
 

@@ -56,12 +56,12 @@ jobs:
           elif [ "$COVERAGE_INT" -ge 50 ]; then COLOR="yellow";
           else COLOR="red"; fi
           mkdir -p .github/badges
-          curl -s "https://img.shields.io/badge/coverage-${COVERAGE}%25-${COLOR}" > .github/badges/coverage.svg
+          echo "{\"schemaVersion\":1,\"label\":\"coverage\",\"message\":\"${COVERAGE}%\",\"color\":\"${COLOR}\"}" > .github/badges/coverage.json
 
       - name: Commit badge
         if: github.ref == 'refs/heads/main'
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add .github/badges/coverage.svg
+          git add .github/badges/coverage.json
           git diff --staged --quiet || git commit -m "Update coverage badge [skip ci]" && git push
