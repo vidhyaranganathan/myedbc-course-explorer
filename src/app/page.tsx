@@ -84,7 +84,7 @@ export default function Home() {
 
   const filterOptions = useMemo(() => getFilterOptions(courses), []);
   const results = useMemo(() => filterCourses(courses, filters), [filters]);
-  const paged = results.slice(0, (page + 1) * PAGE_SIZE);
+  const paged = useMemo(() => results.slice(0, (page + 1) * PAGE_SIZE), [results, page]);
   const hasMore = paged.length < results.length;
 
   function update(key: keyof Filters, value: string) {

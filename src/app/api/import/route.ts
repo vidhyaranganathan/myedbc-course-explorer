@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
-import * as fs from "fs";
+import * as fs from "fs/promises";
 import * as path from "path";
 import type { Course } from "@/lib/types";
 
@@ -49,8 +49,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const workbook = XLSX.read(buffer);
+  const workbook = XLSX.read(await file.arrayBuffer());
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const rows: ExcelRow[] = XLSX.utils.sheet_to_json(sheet);
 
@@ -59,7 +58,7 @@ export async function POST(request: NextRequest) {
     .filter((c) => c.code && c.grade && c.title && c.category);
 
   const outPath = path.join(process.cwd(), "src", "data", "courses.json");
-  fs.writeFileSync(outPath, JSON.stringify(courses));
+  await fs.writeFile(outPath, JSON.stringify(courses));
 
   return NextResponse.json({
     message: `Imported ${courses.length} courses`,
