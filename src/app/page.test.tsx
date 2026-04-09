@@ -136,10 +136,76 @@ describe("Home page", () => {
     expect(screen.getByText("Clear filters")).toBeInTheDocument();
   });
 
-  it("renders all five filter dropdowns", () => {
+  it("renders four filter dropdowns and one subject multi-select", () => {
     renderHome();
     const selects = screen.getAllByRole("combobox");
-    expect(selects).toHaveLength(5);
+    expect(selects).toHaveLength(4);
+    expect(screen.getByText("All Subjects")).toBeInTheDocument();
+  });
+
+  it("opens subject dropdown when button is clicked", () => {
+    renderHome();
+    fireEvent.click(screen.getByText("All Subjects"));
+    expect(screen.getAllByRole("checkbox").length).toBeGreaterThan(0);
+  });
+
+  it("filters by a single subject selection", () => {
+    renderHome();
+    fireEvent.click(screen.getByText("All Subjects"));
+    const mathCheckbox = screen.getByRole("checkbox", { name: /mathematics/i });
+    fireEvent.click(mathCheckbox);
+
+    expect(screen.getByText("Mathematics 10")).toBeInTheDocument();
+    expect(screen.queryByText("English Language Arts 10")).not.toBeInTheDocument();
+    expect(screen.getByText("1 of 5 courses")).toBeInTheDocument();
+  });
+
+  it("filters by multiple subjects using OR logic", () => {
+    renderHome();
+    fireEvent.click(screen.getByText("All Subjects"));
+    fireEvent.click(screen.getByRole("checkbox", { name: /mathematics/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /english language arts/i }));
+
+    expect(screen.getByText("Mathematics 10")).toBeInTheDocument();
+    expect(screen.getByText("English Language Arts 10")).toBeInTheDocument();
+    expect(screen.queryByText("Science 11")).not.toBeInTheDocument();
+    expect(screen.getByText("2 of 5 courses")).toBeInTheDocument();
+  });
+
+  it("unchecking a subject restores results", () => {
+    renderHome();
+    fireEvent.click(screen.getByText("All Subjects"));
+    const mathCheckbox = screen.getByRole("checkbox", { name: /mathematics/i });
+    fireEvent.click(mathCheckbox);
+    expect(screen.getByText("1 of 5 courses")).toBeInTheDocument();
+
+    fireEvent.click(mathCheckbox);
+    expect(screen.getByText("5 courses")).toBeInTheDocument();
+  });
+
+  it("combines subject filter with grade filter", () => {
+    renderHome();
+    // Select grade 10
+    const selects = screen.getAllByRole("combobox");
+    fireEvent.change(selects[0], { target: { value: "10" } });
+    // Select Mathematics subject
+    fireEvent.click(screen.getByText("All Subjects"));
+    fireEvent.click(screen.getByRole("checkbox", { name: /mathematics/i }));
+
+    expect(screen.getByText("Mathematics 10")).toBeInTheDocument();
+    expect(screen.queryByText("English Language Arts 10")).not.toBeInTheDocument();
+    expect(screen.queryByText("Science 11")).not.toBeInTheDocument();
+  });
+
+  it("clear all filters resets subject selection", () => {
+    renderHome();
+    fireEvent.click(screen.getByText("All Subjects"));
+    fireEvent.click(screen.getByRole("checkbox", { name: /mathematics/i }));
+    expect(screen.getByText("1 of 5 courses")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Clear all filters"));
+    expect(screen.getByText("5 courses")).toBeInTheDocument();
+    expect(screen.getByText("All Subjects")).toBeInTheDocument();
   });
 
   it("shows grad electives when available", () => {
