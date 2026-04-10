@@ -1,6 +1,6 @@
 # ADR-001: Static JSON Over Database
 
-**Status**: Accepted  
+**Status**: Superseded by ADR-006
 **Date**: 2025 (project inception)
 
 ## Context
@@ -36,3 +36,7 @@ The project originally started with a Supabase backend and a separate frontend/b
 
 **Neutral:**
 - Deduplication must happen client-side since the raw data is committed as-is
+
+## Amendment (2026-04-10)
+
+This decision was revisited as the project moves toward production. See **ADR-006** for the decision to migrate to Supabase. The static JSON files are retained as the data source for the seed script but will no longer be the primary runtime data layer.
