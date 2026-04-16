@@ -61,6 +61,21 @@ Defines the `Course` interface matching the raw JSON structure. The `Deduplicate
 
 Two committed JSON files that constitute the entire dataset. No database, no API calls.
 
+## Testing Strategy
+
+Three layers, run in order from cheapest to most expensive:
+
+| Layer | Tool | File | What it proves |
+|---|---|---|---|
+| Unit | Vitest | `src/lib/search.test.ts` | Filter logic is correct with controlled data |
+| Component | Vitest + RTL | `src/app/page.test.tsx` | UI renders and responds to events with mocked JSON |
+| E2E | Playwright | `e2e/course-finder.spec.ts` | Real browser + real JSON data — the full user experience |
+
+Run all layers: `npm run test:all`
+Run E2E only: `npm run test:e2e`
+
+E2E tests use Chromium headless. On failure, screenshots and traces are saved to `test-results/`.
+
 ## Design Principles
 
 1. **Simplicity over sophistication**: Static JSON + client-side filtering is sufficient for ~5K courses

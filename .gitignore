@@ -158,6 +158,8 @@ vite.config.ts.timestamp-*
 
 # testing
 /coverage
+/test-results
+/playwright-report
 
 # next.js
 /.next/
@@ -169,6 +171,9 @@ vite.config.ts.timestamp-*
 # misc
 .DS_Store
 *.pem
+
+# IntelliJ / JetBrains IDE
+.idea/
 
 # debug
 npm-debug.log*

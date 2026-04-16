@@ -56,6 +56,21 @@ npm run build
 npm run lint
 ```
 
+### Run tests
+
+```bash
+# Unit + component tests (Vitest, fast, mocked data)
+npm run test
+
+# E2E tests (Playwright, real browser, real data — requires dev server)
+npm run test:e2e
+
+# Run all tests in order: unit → component → E2E
+npm run test:all
+```
+
+E2E tests auto-start the dev server if it isn't already running. Screenshots and traces are saved to `test-results/` on failure.
+
 ### Update course data from Excel
 
 ```bash
