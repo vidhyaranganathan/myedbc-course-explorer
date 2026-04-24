@@ -3,7 +3,7 @@ export interface Filters {
   grade: string;
   category: string;
   language: string;
-  subject: string;
+  subjects: string[];
   credits: string;
 }
 
@@ -12,7 +12,7 @@ export const emptyFilters: Filters = {
   grade: "",
   category: "",
   language: "",
-  subject: "",
+  subjects: [],
   credits: "",
 };
 
@@ -36,7 +36,7 @@ export function filterCourses<T extends Searchable>(courses: T[], filters: Filte
     if (filters.grade && c.grade !== filters.grade) return false;
     if (filters.category && c.category !== filters.category) return false;
     if (filters.language && c.language !== filters.language) return false;
-    if (filters.subject && c.subject !== filters.subject) return false;
+    if (filters.subjects.length > 0 && (!c.subject || !filters.subjects.includes(c.subject))) return false;
     if (filters.credits && c.credits !== filters.credits) return false;
     return true;
   });

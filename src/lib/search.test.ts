@@ -75,9 +75,36 @@ describe("filterCourses", () => {
   });
 
   it("filters by subject", () => {
-    const filters: Filters = { ...emptyFilters, subject: "Mathematics" };
+    const filters: Filters = { ...emptyFilters, subjects: ["Mathematics"] };
     const result = filterCourses(courses, filters);
     expect(result).toHaveLength(1);
+  });
+
+  it("filters by multiple subjects (OR logic)", () => {
+    const filters: Filters = { ...emptyFilters, subjects: ["Mathematics", "English Language Arts"] };
+    const result = filterCourses(courses, filters);
+    expect(result).toHaveLength(2);
+    expect(result.map((c) => c.code).sort()).toEqual(["EN10", "MA10"]);
+  });
+
+  it("combines subjects filter with another filter", () => {
+    const filters: Filters = { ...emptyFilters, subjects: ["Mathematics", "English Language Arts"], grade: "10" };
+    const result = filterCourses(courses, filters);
+    expect(result).toHaveLength(2);
+    expect(result.map((c) => c.code).sort()).toEqual(["EN10", "MA10"]);
+  });
+
+  it("returns all non-null-subject courses when all subjects are selected", () => {
+    const allSubjects = ["Mathematics", "English Language Arts", "Sciences", "Languages", "Business"];
+    const filters: Filters = { ...emptyFilters, subjects: allSubjects };
+    const result = filterCourses(courses, filters);
+    expect(result).toHaveLength(5); // AR09 has null subject, excluded
+  });
+
+  it("returns empty array when subject is not in list", () => {
+    const filters: Filters = { ...emptyFilters, subjects: ["Nonexistent Subject"] };
+    const result = filterCourses(courses, filters);
+    expect(result).toHaveLength(0);
   });
 
   it("filters by credits", () => {
@@ -172,13 +199,15 @@ describe("getFilterOptions", () => {
 });
 
 describe("emptyFilters", () => {
-  it("has all empty string values", () => {
-    expect(Object.values(emptyFilters).every((v) => v === "")).toBe(true);
+  it("has all empty/default values", () => {
+    const { subjects, ...rest } = emptyFilters;
+    expect(Object.values(rest).every((v) => v === "")).toBe(true);
+    expect(subjects).toEqual([]);
   });
 
   it("has all expected filter keys", () => {
     expect(Object.keys(emptyFilters).sort()).toEqual(
-      ["category", "credits", "grade", "language", "query", "subject"]
+      ["category", "credits", "grade", "language", "query", "subjects"]
     );
   });
 });
