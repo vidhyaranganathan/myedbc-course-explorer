@@ -11,9 +11,12 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "import": "tsx scripts/convert-excel.ts",
+    "db:load": "tsx scripts/load_supabase.ts",
     "prepare": "git config core.hooksPath .githooks"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.103.0",
+    "dotenv": "^17.4.1",
     "next": "^16.2.2",
     "react": "19.2.4",
     "react-dom": "19.2.4"

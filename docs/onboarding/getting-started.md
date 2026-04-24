@@ -8,6 +8,7 @@ Welcome to BC Course Finder! This guide will get you up and running.
 - **npm** (comes with Node.js)
 - **Python 3** (only needed if you're updating course details data)
 - **Git**
+- **Supabase project** (free tier) — needed for the data layer and `npm run db:load`
 
 ## Setup
 
@@ -18,6 +19,10 @@ cd myedbc-course-explorer
 
 # Install dependencies (automatically enables pre-push hook)
 npm install
+
+# Copy the env template and fill in your Supabase credentials
+cp .env.example .env.local
+# Edit .env.local and set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY
 
 # Start the dev server
 npm run dev
@@ -73,6 +78,16 @@ python3 scripts/scrape-course-details.py
 ```
 
 This script is resumable — if interrupted, it picks up where it left off.
+
+### Seed the Supabase database
+
+After refreshing the JSON data files, load them into Supabase:
+
+```bash
+npm run db:load
+```
+
+Requires `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SECRET_KEY` in `.env.local`. The script upserts all three tables (`courses`, `course_grad_programs`, `course_grad_requirements`) in batches and is safe to re-run. See ADR-006 for the migration rationale.
 
 ## Next Steps
 
