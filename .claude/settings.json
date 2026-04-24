@@ -3,23 +3,42 @@
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
-        "command": "file_path=$(echo \"$MCP_TOOL_INPUT\" | grep -o '\"file_path\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4); case \"$file_path\" in *.ts|*.tsx|*.js|*.jsx) npm run lint 2>&1 | tail -20 ;; esac"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file_path=$(echo \"$MCP_TOOL_INPUT\" | grep -o '\"file_path\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4); case \"$file_path\" in *.ts|*.tsx|*.js|*.jsx) npm run lint 2>&1 | tail -20 ;; esac"
+          }
+        ]
       },
       {
         "matcher": "Edit|Write",
-        "command": "file_path=$(echo \"$MCP_TOOL_INPUT\" | grep -o '\"file_path\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4); case \"$file_path\" in */lib/*.ts|*/app/page.tsx) npm run test 2>&1 | tail -15 ;; esac"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file_path=$(echo \"$MCP_TOOL_INPUT\" | grep -o '\"file_path\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4); case \"$file_path\" in */lib/*.ts|*/app/page.tsx) npm run test 2>&1 | tail -15 ;; esac"
+          }
+        ]
       }
     ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write",
-        "command": "file_path=$(echo \"$MCP_TOOL_INPUT\" | grep -o '\"file_path\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4); case \"$file_path\" in */src/data/*) echo 'BLOCK: Data files are generated. Use npm run import or the scrape script instead.' && exit 1 ;; esac"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file_path=$(echo \"$MCP_TOOL_INPUT\" | grep -o '\"file_path\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4); case \"$file_path\" in */src/data/*) echo 'BLOCK: Data files are generated. Use npm run import or the scrape script instead.' && exit 1 ;; esac"
+          }
+        ]
       },
       {
         "matcher": "Edit|Write",
-        "type": "prompt",
-        "prompt": "You are an architecture drift detector. Check if this code change violates any existing Architecture Decision Records.\n\nThe tool input is: $ARGUMENTS\n\nRead ALL files in docs/decisions/ (skip template.md). For each ADR, understand the decision that was made, then check if the proposed code change contradicts it. Think about what kind of code changes would violate each decision.\n\nIf no violation is detected, respond with exactly: PASS\nIf a violation is detected, respond with: WARN: [which ADR] - [what the violation is]. This change may be intentional — consider updating the ADR if the decision has changed.",
-        "model": "claude-haiku-4-5-20251001"
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "You are an architecture drift detector. Check if this code change violates any existing Architecture Decision Records.\n\nThe tool input is: $ARGUMENTS\n\nRead ALL files in docs/decisions/ (skip template.md). For each ADR, understand the decision that was made, then check if the proposed code change contradicts it. Think about what kind of code changes would violate each decision.\n\nIf no violation is detected, respond with exactly: PASS\nIf a violation is detected, respond with: WARN: [which ADR] - [what the violation is]. This change may be intentional — consider updating the ADR if the decision has changed.",
+            "model": "claude-haiku-4-5-20251001"
+          }
+        ]
       }
     ]
   }
