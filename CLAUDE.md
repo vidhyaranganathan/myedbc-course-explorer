@@ -92,6 +92,22 @@ See `docs/` for onboarding guides, architecture overview, decision records, and 
 - `/backlog <description>` — Auto-routes to roadmap, tech-debt, or agentic-workflows based on content
 - `/backlog-sweep` — Scans tracking files and closes items that are done (auto-triggers on "done"/"shipped")
 
+## Branch Naming Convention
+
+Branches must be named by feature, not by person. Format: `<type>/<short-description>`
+
+| Type | Use for |
+|------|---------|
+| `feat/` | New features |
+| `fix/` | Bug fixes |
+| `chore/` | Tooling, config, deps |
+| `refactor/` | Code restructuring |
+| `docs/` | Documentation only |
+
+Examples: `feat/multi-select-filters`, `fix/pagination-scroll`, `refactor/extract-components`
+
+Do **not** name branches after yourself (e.g. `Anitha`, `PriyaK`).
+
 ## Code Conventions
 
 - TypeScript strict mode
