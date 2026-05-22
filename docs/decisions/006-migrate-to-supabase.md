@@ -20,18 +20,35 @@ Supabase was the original backend before the static-JSON simplification. The sch
 
 Migrate the runtime data layer from static JSON to Supabase (Postgres). The migration is done in two phases:
 
-1. **Seed phase** — `scripts/load_supabase.ts` reads the committed JSON files and upserts them into three Supabase tables (`courses`, `course_grad_programs`, `course_grad_requirements`). Run manually via `npm run db:load`.
+1. **Seed phase** — `scripts/migrate.sql` creates the schema (run once in the Supabase SQL Editor). `scripts/load_supabase.ts` then reads the committed JSON files and upserts all five tables. Run via `npm run db:load`.
 2. **App phase** — Replace the client-side JSON imports in `page.tsx` with Supabase queries using `@supabase/supabase-js`.
 
-The static JSON files remain in the repo as the authoritative seed source and as a fallback during the transition.
+The static JSON files remain in the repo as the authoritative seed source.
 
 ## Supabase Table Schema
 
-| Table | Primary Key | ~Rows |
-|-------|-------------|-------|
-| `courses` | `code` | 5,480 |
-| `course_grad_programs` | `course_code, grad_program` | 12,741 |
-| `course_grad_requirements` | `course_code, requirement, examinable_date` | varies |
+Five tables across two source domains:
+
+**From Excel (`open_courses.xlsx`) — run `npm run db:load`:**
+
+| Table | Primary Key | Rows |
+|-------|-------------|------|
+| `courses` | `(code, grade)` | 5,480 |
+| `course_grad_programs` | `(course_code, course_grade, grad_program)` | 11,241 |
+
+**From scraper (`course-details.json`) — run `npm run db:load`:**
+
+| Table | Primary Key | Rows |
+|-------|-------------|------|
+| `course_details` | `code` | 5,480 |
+| `course_grad_requirements` | `(course_code, requirement, examinable_date)` | 2,983 |
+| `course_grad_electives` | `(course_code, grad_program)` | 3,833 |
+
+The `courses` PK is `(code, grade)` — not just `code` — because the same course code can appear at multiple grades. The old schema used `code` alone and silently dropped grade variants.
+
+The `course_grad_electives` table stores the actual grad program names (previously collapsed into a `has_grad_elective` boolean, losing the data).
+
+**Extra Excel columns** (`myedb_code`, `trax_code`, `developer`, `authorizer`, `open_date`, `close_date`, `completion_end_date`, `ministry_subject_code`) are present in the `courses` table schema but are `null` until the load script is run with the Excel file directly: `npm run db:load -- /path/to/open_courses.xlsx`.
 
 ## Environment Variables
 
