@@ -11,7 +11,7 @@
 │  │                                                   │  │
 │  │  ┌─────────────┐  ┌─────────────────────────────┐│  │
 │  │  │ Static JSON  │  │       Client-Side App       ││  │
-│  │  │              │  │                             ││  │
+│  │  │ (interim)    │  │                             ││  │
 │  │  │ courses.json │──│  page.tsx (single page)     ││  │
 │  │  │ course-      │  │    ├─ Deduplication logic   ││  │
 │  │  │ details.json │──│    ├─ Filter UI             ││  │
@@ -23,8 +23,20 @@
 │  │                    └─────────────────────────────┘│  │
 │  └───────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
+         ▲ app phase (pending): replace JSON imports
+         │ with Supabase queries
+         │
+┌─────────────────────────────────────────────────────────┐
+│                  Supabase (Postgres)                    │
+│                                                         │
+│  courses                 (code, grade) PK  5,480 rows   │
+│  course_grad_programs    (code, grade, program)  11,241  │
+│  course_details          code PK           5,480 rows   │
+│  course_grad_requirements                  2,983 rows   │
+│  course_grad_electives                     3,833 rows   │
+└─────────────────────────────────────────────────────────┘
 
-Offline / Dev only:
+Data pipeline (offline / dev only):
   ┌──────────────────┐    ┌──────────────────────────┐
   │ BC Ministry Excel│───▶│ scripts/convert-excel.ts │──▶ courses.json
   └──────────────────┘    └──────────────────────────┘
@@ -32,6 +44,10 @@ Offline / Dev only:
   │ BC Course        │───▶│ scripts/scrape-course-       │──▶ course-details.json
   │ Registry website │    │ details.py                   │
   └──────────────────┘    └──────────────────────────────┘
+  ┌──────────────────┐    ┌──────────────────────────┐
+  │ courses.json +   │───▶│ scripts/load_supabase.ts │──▶ Supabase tables
+  │ course-details   │    │ (npm run db:load)         │
+  └──────────────────┘    └──────────────────────────┘
 ```
 
 ## Key Components
@@ -57,13 +73,21 @@ Generic filtering functions that work with any type extending the `Searchable` i
 
 Defines the `Course` interface matching the raw JSON structure. The `DeduplicatedCourse` type (defined in `page.tsx`) extends this by replacing `gradProgram`/`gradRequirement` with a `gradPrograms` array.
 
-### `src/data/` — Static Data
+### `src/data/` — Static Data (interim)
 
-Two committed JSON files that constitute the entire dataset. No database, no API calls.
+Two committed JSON files used as the seed source for Supabase and as an interim data layer until the app-phase Supabase integration is complete.
+
+### `scripts/migrate.sql` — Database Schema
+
+DDL for all five Supabase tables. Run once in the Supabase SQL Editor to create the schema.
+
+### `scripts/load_supabase.ts` — Data Loader
+
+Reads `courses.json` + `course-details.json` and upserts all five Supabase tables. Run via `npm run db:load`. Accepts an optional Excel path argument for a full-field load: `npm run db:load -- /path/to/open_courses.xlsx`.
 
 ## Design Principles
 
-1. **Simplicity over sophistication**: Static JSON + client-side filtering is sufficient for ~5K courses
-2. **No backend**: The data changes infrequently and fits comfortably in memory
+1. **Simplicity over sophistication**: Client-side filtering across ~5K courses remains instant
+2. **Supabase as the runtime data layer**: Replaces static JSON imports; enables data updates without redeployment (see ADR-006)
 3. **Fast iteration**: One file for the UI, one file for search logic, one file for types
 4. **Offline-first data pipeline**: Data transformation happens on the developer's machine, not at runtime

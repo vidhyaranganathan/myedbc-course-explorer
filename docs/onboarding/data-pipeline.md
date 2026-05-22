@@ -8,19 +8,24 @@ This doc explains how course data flows from source to the running app.
 BC Ministry Excel file
         │
         ▼
-  npm run import          (scripts/convert-excel.ts)
+  npm run import               (scripts/convert-excel.ts)
         │
         ▼
-  src/data/courses.json   (12,741 rows, committed to git)
+  src/data/courses.json        (12,741 rows, committed to git)
         │
-        ▼
-  Browser loads JSON      (page.tsx imports it statically)
+        ├──▶ Browser loads JSON (interim — page.tsx imports it statically)
+        │         │
+        │         ▼
+        │    Client deduplicates  (code+grade key → 4,962 unique courses)
+        │         │
+        │         ▼
+        │    Filtered to grades 9-12 and displayed
         │
-        ▼
-  Client deduplicates     (code+grade key → 4,962 unique courses)
-        │
-        ▼
-  Filtered to grades 9-12 and displayed
+        └──▶ npm run db:load    (scripts/load_supabase.ts)
+                  │
+                  ▼
+         Supabase: courses (5,480 rows, PK: code+grade)
+                   course_grad_programs (11,241 rows)
 
 
 BC Course Registry website
@@ -31,8 +36,14 @@ BC Course Registry website
         ▼
   src/data/course-details.json   (5,480 entries, committed to git)
         │
-        ▼
-  Browser looks up details by course code
+        ├──▶ Browser looks up details by course code (interim)
+        │
+        └──▶ npm run db:load    (scripts/load_supabase.ts)
+                  │
+                  ▼
+         Supabase: course_details (5,480 rows)
+                   course_grad_requirements (2,983 rows)
+                   course_grad_electives (3,833 rows)
 ```
 
 ## Data Sources
@@ -42,7 +53,8 @@ BC Course Registry website
 - **Source**: `~/Downloads/open_courses (1).xlsx` from the BC Ministry of Education
 - **Conversion script**: `scripts/convert-excel.ts` (run via `npm run import`)
 - **Output**: `src/data/courses.json`
-- **Fields**: code, grade, title, credits, category, language, subject, subCategory, gradProgram, gradRequirement
+- **Fields captured in JSON**: code, grade, title, credits, category, language, subject, subCategory, gradProgram, gradRequirement
+- **Additional fields in Excel** (not in JSON, loaded directly by `load_supabase.ts` when Excel path is provided): myedb_code, trax_code, developer, authorizer, open_date, close_date, completion_end_date, ministry_subject_code
 
 Each row in the Excel file represents one course + graduation program combination. The same course code appears multiple times if it counts toward different grad programs.
 
@@ -88,13 +100,26 @@ The scraper is resumable — if you interrupt it, re-running picks up where it l
 When the Ministry publishes a new Excel file:
 
 1. Download the new file
-2. Run `npm run import -- /path/to/file.xlsx`
+2. Run `npm run import -- /path/to/file.xlsx` to regenerate `courses.json`
 3. Optionally re-run the scraper if new course codes appear: `python3 scripts/scrape-course-details.py`
 4. Commit both JSON files
-5. Deploy
+5. Reload Supabase: `npm run db:load -- /path/to/file.xlsx` (or `npm run db:load` to use courses.json)
+6. Deploy
+
+## Supabase Schema
+
+Tables are created by running `scripts/migrate.sql` in the Supabase SQL Editor (one-time setup).
+
+| Table | Source | Primary Key | Rows |
+|-------|--------|-------------|------|
+| `courses` | Excel / courses.json | `(code, grade)` | 5,480 |
+| `course_grad_programs` | Excel / courses.json | `(course_code, course_grade, grad_program)` | 11,241 |
+| `course_details` | course-details.json | `code` | 5,480 |
+| `course_grad_requirements` | course-details.json | `(course_code, requirement, examinable_date)` | 2,983 |
+| `course_grad_electives` | course-details.json | `(course_code, grad_program)` | 3,833 |
 
 ## Important Notes
 
-- Both JSON files are **committed to git** and ship with the app — there is no runtime data fetching
+- Both JSON files are **committed to git** and serve as the seed source for Supabase
 - The `xlsx` npm package is in `devDependencies` only — it has known vulnerabilities but is only used locally in the import script, never in production
-- Deduplication happens at runtime in the browser, not during the import step
+- Deduplication happens at runtime in the browser (interim), and is implicit in the DB schema via the `(code, grade)` primary key

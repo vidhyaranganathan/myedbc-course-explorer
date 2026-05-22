@@ -4,7 +4,7 @@ Product features only. For code/design issues see [tech-debt.md](tech-debt.md). 
 
 ## Current State
 
-BC Course Finder is a functional single-page app with search and filtering across ~5K BC high school courses. Data is static JSON, deployed on Vercel Hobby.
+BC Course Finder is a functional single-page app with search and filtering across ~5K BC high school courses. Data is currently static JSON deployed on Vercel Hobby. A Supabase migration is in progress (see ADR-006) to support production go-live and future features.
 
 ## Near-Term
 
@@ -30,4 +30,4 @@ BC Course Finder is a functional single-page app with search and filtering acros
 | R-006 | K-8 course support | Data is already in the JSON, UI would need a toggle or separate view | Unassigned | Planned |
 | R-007 | Course recommendations | Suggest related courses based on subject area or prerequisites | Unassigned | Planned |
 | R-008 | PWA support | Offline access for users with intermittent connectivity | Unassigned | Planned |
-| R-009 | Migrate data to Supabase | Move from hardcoded static JSON to Supabase database. Current approach was a deliberate PoC choice — revisit when data update frequency increases or user-generated content is needed | Unassigned | Planned |
+| R-009 | Migrate data to Supabase | Move from hardcoded static JSON to Supabase database. Seed script (`npm run db:load`) complete. App-side query integration pending. See ADR-006. | Unassigned | In Progress |
