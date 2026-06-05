@@ -2,23 +2,22 @@
  * Load course data into Supabase.
  *
  * Usage:
- *   npm run db:load                          # uses courses.json fallback
- *   npm run db:load -- /path/to/open_courses.xlsx  # full data from Excel
+ *   npm run db:load                               # uses courses.json fallback
+ *   npm run db:load -- /path/to/open_courses.xlsx # full data from Excel
  *
  * Reads (Excel mode):
- *   <excel path>               all columns including trax_code, myedb_code, dates, etc.
+ *   <excel path>               all columns including trax_code, myedb_code, developer, etc.
  *   src/data/course-details.json
  *
  * Reads (fallback mode — no Excel):
- *   src/data/courses.json      (extra Excel-only fields will be null)
+ *   src/data/courses.json      (myedb_code, trax_code, developer will be null)
  *   src/data/course-details.json
  *
  * Populates:
- *   courses                  — one row per (code, grade)
- *   course_grad_programs     — one row per (code, grade, grad_program)
- *   course_details           — one row per code  (scraped data)
- *   course_grad_requirements — one row per (code, requirement, examinable_date)
- *   course_grad_electives    — one row per (code, grad_program)
+ *   courses        — one row per (code, grade), grad_info jsonb aggregates all
+ *                    grad program associations for that course
+ *   course_details — one row per code (scraped data), grad_requirements and
+ *                    grad_electives stored as jsonb arrays
  */
 
 import * as fs from "fs";
@@ -47,6 +46,11 @@ const BATCH_SIZE = 200;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+interface GradInfoEntry {
+  program: string;
+  requirement: string | null;
+}
+
 interface CourseRow {
   code: string;
   grade: string;
@@ -59,18 +63,7 @@ interface CourseRow {
   myedb_code: string | null;
   trax_code: string | null;
   developer: string | null;
-  authorizer: string | null;
-  open_date: string | null;
-  close_date: string | null;
-  completion_end_date: string | null;
-  ministry_subject_code: string | null;
-}
-
-interface GradProgramRow {
-  course_code: string;
-  course_grade: string;
-  grad_program: string;
-  grad_requirement: string | null;
+  grad_info: GradInfoEntry[];
 }
 
 interface CourseDetailRow {
@@ -78,18 +71,8 @@ interface CourseDetailRow {
   generic_course_type: string | null;
   program_guide_title: string | null;
   published_description: string | null;
-}
-
-interface GradRequirementRow {
-  course_code: string;
-  requirement: string;
-  examinable_date: string;
-  program_end: string | null;
-}
-
-interface GradElectiveRow {
-  course_code: string;
-  grad_program: string;
+  grad_requirements: { program: string; requirement: string; examinable: string }[];
+  grad_electives: string[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -98,26 +81,6 @@ function clean(value: unknown): string | null {
   if (value === null || value === undefined || value === "") return null;
   const s = String(value).trim();
   return s === "" ? null : s;
-}
-
-/** Convert an Excel serial date number or date string to ISO YYYY-MM-DD, or null. */
-function toIsoDate(value: unknown): string | null {
-  if (value === null || value === undefined || value === "") return null;
-  // Already a string date
-  if (typeof value === "string") {
-    const s = value.trim();
-    if (s === "") return null;
-    const d = new Date(s);
-    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-    return null;
-  }
-  // Excel serial number (days since 1900-01-01, with Lotus 1-2-3 leap year bug)
-  if (typeof value === "number") {
-    const excelEpoch = new Date(1899, 11, 30);
-    const d = new Date(excelEpoch.getTime() + value * 86400000);
-    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-  }
-  return null;
 }
 
 function decodeHtml(str: string): string {
@@ -157,46 +120,35 @@ interface RawRow {
   myedbCode: string | null;
   traxCode: string | null;
   developer: string | null;
-  authorizer: string | null;
-  openDate: unknown;
-  closeDate: unknown;
-  completionEndDate: unknown;
-  ministrySubjectCode: string | null;
 }
 
 let rawRows: RawRow[];
 
 if (excelArg && fs.existsSync(excelArg)) {
   console.log(`Reading Excel: ${excelArg}`);
-  // Dynamic import — xlsx is a devDependency
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const XLSX = require("xlsx");
   const workbook = XLSX.readFile(excelArg);
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(sheet) as Record<string, unknown>[];
   rawRows = rows.map((r) => ({
-    code:                 String(r["Course Code"] ?? "").trim(),
-    grade:                String(r["Grade"] ?? "").trim(),
-    title:                String(r["Course Title"] ?? "").trim(),
-    credits:              clean(r["Credit Value"]),
-    category:             String(r["Course Category"] ?? "").trim(),
-    language:             String(r["Lang Of Inst"] || "English").trim(),
-    subject:              clean(r["HST Main Category"]),
-    subCategory:          clean(r["HST Sub Category"]),
-    gradProgram:          clean(r["Grad Program"]),
-    gradRequirement:      clean(r["Grad Program Requirement"]),
-    myedbCode:            clean(r["MyEd BC Code"]),
-    traxCode:             clean(r["TRAX Code"]),
-    developer:            clean(r["Developer"]),
-    authorizer:           clean(r["Authorizer"]),
-    openDate:             r["Open Date"] ?? null,
-    closeDate:            r["Close Date"] ?? null,
-    completionEndDate:    r["Completion End Date"] ?? null,
-    ministrySubjectCode:  clean(r["Ministry Subject Code"]),
+    code:            String(r["Course Code"] ?? "").trim(),
+    grade:           String(r["Grade"] ?? "").trim(),
+    title:           String(r["Course Title"] ?? "").trim(),
+    credits:         clean(r["Credit Value"]),
+    category:        String(r["Course Category"] ?? "").trim(),
+    language:        String(r["Lang Of Inst"] || "English").trim(),
+    subject:         clean(r["HST Main Category"]),
+    subCategory:     clean(r["HST Sub Category"]),
+    gradProgram:     clean(r["Grad Program"]),
+    gradRequirement: clean(r["Grad Program Requirement"]),
+    myedbCode:       clean(r["MyEd BC Code"]),
+    traxCode:        clean(r["TRAX Code"]),
+    developer:       clean(r["Developer"]),
   })).filter((r) => r.code && r.grade && r.title && r.category);
 } else {
   if (excelArg) console.warn(`Excel file not found at ${excelArg}, falling back to courses.json`);
-  else console.log("No Excel path provided — using courses.json (extra Excel fields will be null)");
+  else console.log("No Excel path provided — using courses.json (myedb_code, trax_code, developer will be null)");
 
   const jsonRows = JSON.parse(
     fs.readFileSync(path.join("src", "data", "courses.json"), "utf-8")
@@ -207,24 +159,19 @@ if (excelArg && fs.existsSync(excelArg)) {
   }>;
 
   rawRows = jsonRows.map((r) => ({
-    code:                String(r.code).trim(),
-    grade:               r.grade.trim(),
-    title:               r.title.trim(),
-    credits:             r.credits ?? null,
-    category:            r.category.trim(),
-    language:            (r.language || "English").trim(),
-    subject:             r.subject ?? null,
-    subCategory:         r.subCategory ?? null,
-    gradProgram:         r.gradProgram ?? null,
-    gradRequirement:     r.gradRequirement ?? null,
-    myedbCode:           null,
-    traxCode:            null,
-    developer:           null,
-    authorizer:          null,
-    openDate:            null,
-    closeDate:           null,
-    completionEndDate:   null,
-    ministrySubjectCode: null,
+    code:            String(r.code).trim(),
+    grade:           r.grade.trim(),
+    title:           r.title.trim(),
+    credits:         r.credits ?? null,
+    category:        r.category.trim(),
+    language:        (r.language || "English").trim(),
+    subject:         r.subject ?? null,
+    subCategory:     r.subCategory ?? null,
+    gradProgram:     r.gradProgram ?? null,
+    gradRequirement: r.gradRequirement ?? null,
+    myedbCode:       null,
+    traxCode:        null,
+    developer:       null,
   }));
 }
 
@@ -241,83 +188,55 @@ const detailsMap: Record<string, CourseDetailSource> = JSON.parse(
 );
 
 // ── Transform ─────────────────────────────────────────────────────────────────
+//
+// courses: group by (code, grade), accumulate grad programs into grad_info array.
+// course_details: one row per code, arrays kept as-is from the scraper.
 
-const courseMap = new Map<string, CourseRow>();         // key: "code|grade"
-const gradPrograms: GradProgramRow[] = [];
-const courseDetails: CourseDetailRow[] = [];
-const gradRequirements: GradRequirementRow[] = [];
-const gradElectives: GradElectiveRow[] = [];
-
-// Track seen grad programs to avoid duplicates within the same (code, grade, program)
-const seenGradPrograms = new Set<string>();
+const courseMap = new Map<string, CourseRow>();
 
 for (const row of rawRows) {
   const key = `${row.code}|${row.grade}`;
 
   if (!courseMap.has(key)) {
     courseMap.set(key, {
-      code:                 row.code,
-      grade:                row.grade,
-      title:                row.title,
-      credits:              row.credits,
-      category:             row.category,
-      language:             row.language,
-      subject:              row.subject,
-      sub_category:         row.subCategory,
-      myedb_code:           row.myedbCode,
-      trax_code:            row.traxCode,
-      developer:            row.developer,
-      authorizer:           row.authorizer,
-      open_date:            toIsoDate(row.openDate),
-      close_date:           toIsoDate(row.closeDate),
-      completion_end_date:  toIsoDate(row.completionEndDate),
-      ministry_subject_code: row.ministrySubjectCode,
+      code:         row.code,
+      grade:        row.grade,
+      title:        row.title,
+      credits:      row.credits,
+      category:     row.category,
+      language:     row.language,
+      subject:      row.subject,
+      sub_category: row.subCategory,
+      myedb_code:   row.myedbCode,
+      trax_code:    row.traxCode,
+      developer:    row.developer,
+      grad_info:    [],
     });
   }
 
-  if (row.gradProgram) {
-    const gpKey = `${row.code}|${row.grade}|${row.gradProgram}`;
-    if (!seenGradPrograms.has(gpKey)) {
-      seenGradPrograms.add(gpKey);
-      gradPrograms.push({
-        course_code:     row.code,
-        course_grade:    row.grade,
-        grad_program:    row.gradProgram,
-        grad_requirement: row.gradRequirement ?? null,
+  if (row.gradProgram !== null) {
+    const course = courseMap.get(key)!;
+    // Avoid duplicates within the same (code, grade, program) combination
+    const already = course.grad_info.some((g) => g.program === row.gradProgram);
+    if (!already) {
+      course.grad_info.push({
+        program:     row.gradProgram,
+        requirement: row.gradRequirement ?? null,
       });
     }
   }
 }
 
-// course_details, course_grad_requirements, course_grad_electives — from scraper
-const seenDetailCodes = new Set<string>();
-
-for (const [code, detail] of Object.entries(detailsMap)) {
-  if (!seenDetailCodes.has(code)) {
-    seenDetailCodes.add(code);
-    courseDetails.push({
-      code,
-      generic_course_type:   detail.genericCourseType ?? null,
-      program_guide_title:   detail.programGuideTitle ? decodeHtml(detail.programGuideTitle) : null,
-      published_description: detail.publishedDescription ?? null,
-    });
-  }
-
-  for (const req of detail.gradRequirements ?? []) {
-    gradRequirements.push({
-      course_code:     code,
-      requirement:     req.requirement,
-      examinable_date: req.examinable,
-      program_end:     req.program ?? null,
-    });
-  }
-
-  for (const prog of detail.gradElectives ?? []) {
-    gradElectives.push({ course_code: code, grad_program: prog });
-  }
-}
-
 const courses = Array.from(courseMap.values());
+
+const courseDetails: CourseDetailRow[] = Object.entries(detailsMap).map(([code, detail]) => ({
+  code,
+  generic_course_type:   detail.genericCourseType ?? null,
+  program_guide_title:   detail.programGuideTitle ? decodeHtml(detail.programGuideTitle) : null,
+  published_description: detail.publishedDescription ?? null,
+  grad_requirements:     detail.gradRequirements ?? [],
+  grad_electives:        detail.gradElectives ?? [],
+}));
 
 // ── Batch upsert ──────────────────────────────────────────────────────────────
 
@@ -350,30 +269,19 @@ async function main() {
   console.log(`  Raw rows:            ${rawRows.length}`);
   console.log(`  course-details.json: ${Object.keys(detailsMap).length} entries`);
   console.log(`\nTransformed:`);
-  console.log(`  courses:                  ${courses.length}`);
-  console.log(`  course_grad_programs:     ${gradPrograms.length}`);
-  console.log(`  course_details:           ${courseDetails.length}`);
-  console.log(`  course_grad_requirements: ${gradRequirements.length}`);
-  console.log(`  course_grad_electives:    ${gradElectives.length}`);
+  console.log(`  courses:        ${courses.length} (unique code+grade pairs)`);
+  console.log(`  course_details: ${courseDetails.length}`);
   console.log(`\nLoading...`);
 
   await upsertBatches("courses", courses, "code,grade");
-  await upsertBatches("course_grad_programs", gradPrograms, "course_code,course_grade,grad_program");
   await upsertBatches("course_details", courseDetails, "code");
-  await upsertBatches("course_grad_requirements", gradRequirements, "course_code,requirement,examinable_date");
-  await upsertBatches("course_grad_electives", gradElectives, "course_code,grad_program");
 
   console.log("\nDone. Verifying row counts...");
 
-  const tables = [
-    { name: "courses",                  expected: courses.length },
-    { name: "course_grad_programs",     expected: gradPrograms.length },
-    { name: "course_details",           expected: courseDetails.length },
-    { name: "course_grad_requirements", expected: gradRequirements.length },
-    { name: "course_grad_electives",    expected: gradElectives.length },
-  ];
-
-  for (const { name, expected } of tables) {
+  for (const { name, expected } of [
+    { name: "courses",        expected: courses.length },
+    { name: "course_details", expected: courseDetails.length },
+  ]) {
     const { count, error } = await supabase
       .from(name)
       .select("*", { count: "exact", head: true });
