@@ -69,6 +69,20 @@ Columns: `code`, `generic_course_type`, `program_guide_title`, `published_descri
 
 An earlier iteration of this schema used 5 tables, normalising grad programs into `course_grad_programs`, `course_grad_requirements`, and `course_grad_electives`. That was rejected because:
 
+#### Data loss risk of a simpler filter approach
+
+Before settling on JSONB, a "filter to 2023 program only" approach was considered — since current students are all on the 2023 Graduation Program and that filter produces zero duplicate rows. However, filtering to 2023 alone would silently drop **1,600 course codes** from the database:
+
+- **1,500 courses** have no grad program association at all (French-language Board Authority courses, K-8 courses grades 6–9, Ministry courses without a program assignment)
+- **100 courses** exist only in older programs (1995, Adult Graduation, Course-Based) and never appear in the 2023 set
+
+The JSONB approach keeps all 5,480 unique `(code, grade)` rows — none dropped — while still making it trivial to query 2023-only courses:
+```sql
+WHERE grad_info @> '[{"program": "2023 Graduation Program"}]'
+```
+
+#### Why not 5 normalised tables
+
 - It solved for a graduation planner query pattern that hasn't been designed yet
 - It introduced FK complexity (course_details FK'd to a (code, grade) PK didn't work cleanly)
 - It split logically related data across joins that the current app doesn't need
