@@ -199,7 +199,7 @@ export default function Home() {
               onChange={(v) => update("subject", v)}
             />
             <FilterSelect
-                label="Credits"
+                label="Credit"
                 value={filters.credits}
                 options={filterOptions.credits}
                 onChange={(v) => update("credits", v)}
