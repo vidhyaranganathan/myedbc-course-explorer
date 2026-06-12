@@ -1,6 +1,6 @@
 # ADR-005: Filter to Grades 9-12 Only
 
-**Status**: Accepted  
+**Status**: Superseded by ADR-008
 **Date**: 2025
 
 ## Context

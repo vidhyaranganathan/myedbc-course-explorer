@@ -4,6 +4,9 @@
 **Date**: 2026-04-10
 **Updated**: 2026-06-11
 **Supersedes**: ADR-001
+**Amended by**: ADR-007 (app-phase: DB is the only source of truth, reached via an
+API-only gateway; the static JSON files are deleted rather than retained as a seed
+source, and the browser no longer queries Supabase directly)
 
 ## Context
 
