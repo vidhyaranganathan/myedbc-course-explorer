@@ -57,6 +57,7 @@ npm run db:load -- ./payload.json  # POST a JSON payload to /api/courses (gated 
 All DB access goes through Next.js Route Handlers under `src/app/api/courses/`:
 
 - `GET /api/courses` — all courses (list) as JSON; feeds the client grid + in-memory filtering.
+- `GET /api/courses/[code]` — one course from the `courses` table (REST get-by-id, no `course_details` — ADR-009); `404` if not found. Not used by the current UI (the grid filters the list client-side), but available for API consumers.
 - `POST /api/courses` — secret-gated bulk upsert of courses only; header `X-Api-Key` must equal env `API_WRITE_SECRET`. This is the only write path.
 
 The browser never queries Supabase directly. The `service_role` key (`SUPABASE_SECRET_KEY`) lives only in the server-side route handlers via `src/lib/supabase-server.ts`, and RLS is enabled on the DB.

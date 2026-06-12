@@ -59,6 +59,7 @@ The entire UI is a single client component (`"use client"`). It:
 The only path between the app and Supabase (ADR-007):
 
 - `GET /api/courses` — returns all courses; feeds the grid + in-memory filtering
+- `GET /api/courses/[code]` — one course (REST get-by-id, no `course_details` — ADR-009); not used by the current UI, available for API consumers
 - `POST /api/courses` — secret-gated bulk upsert of courses; the `X-Api-Key` header must equal env `API_WRITE_SECRET`. This is the only write path.
 
 ### `src/lib/supabase-server.ts` — Server-Only DB Client

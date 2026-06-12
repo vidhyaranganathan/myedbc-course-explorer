@@ -30,11 +30,15 @@ trustworthy source, the app should not use this data at all.
   requirement). The description, program guide title, grad-requirements table,
   and electives are removed. With no detail to fetch, expanding a card is instant
   (no second request).
-- **API** — `GET /api/courses/[code]` is removed; its only purpose was serving
-  `course_details`. `POST /api/courses` no longer accepts or writes
-  `courseDetails`. The API surface is courses-only:
+- **API** — `POST /api/courses` no longer accepts or writes `courseDetails`, and
+  no endpoint reads `course_details`. The API surface is courses-only:
   - `GET /api/courses` — list all courses
+  - `GET /api/courses/[code]` — one course (from the `courses` table; **no
+    details** — this is the REST get-by-id, not a details lookup)
   - `POST /api/courses` — secret-gated upsert of courses
+
+  (The original `[code]` route returned `{ course, details }`; it now returns just
+  the course row.)
 - **DB** — the `course_details` table and its data **remain** in Supabase and in
   `scripts/migrate.sql`, untouched. They are simply not referenced by any
   application code, so the data is preserved for if/when it becomes viable.
