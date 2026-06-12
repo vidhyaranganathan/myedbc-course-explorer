@@ -3,17 +3,33 @@ import { createServerClient } from "@/lib/supabase-server";
 import { COURSE_COLUMNS, toCourseListItem } from "@/lib/courses-mapper";
 import type { CourseUpsertBody } from "@/lib/types";
 
-const BATCH_SIZE = 200;
+const BATCH_SIZE = 200; // upsert batch size for writes
+const READ_PAGE_SIZE = 1000; // PostgREST caps a select at ~1000 rows; page through for reads
 
-/** GET /api/courses — all courses (no details). Feeds the grid + in-memory filtering. */
+/**
+ * GET /api/courses — all courses (no details). Feeds the grid + in-memory filtering.
+ *
+ * PostgREST caps a single select at ~1000 rows, so we page through with .range()
+ * (ordered by code for stable paging) until a short page signals the end.
+ */
 export async function GET() {
   try {
     const supabase = createServerClient();
-    const { data, error } = await supabase.from("courses").select(COURSE_COLUMNS);
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    const all: Parameters<typeof toCourseListItem>[0][] = [];
+    for (let from = 0; ; from += READ_PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from("courses")
+        .select(COURSE_COLUMNS)
+        .order("code", { ascending: true })
+        .range(from, from + READ_PAGE_SIZE - 1);
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      const page = data ?? [];
+      all.push(...page);
+      if (page.length < READ_PAGE_SIZE) break;
     }
-    return NextResponse.json((data ?? []).map(toCourseListItem));
+    return NextResponse.json(all.map(toCourseListItem));
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
