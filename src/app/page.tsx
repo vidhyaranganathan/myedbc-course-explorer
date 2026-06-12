@@ -1,49 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import coursesData from "@/data/courses.json";
-import courseDetailsData from "@/data/course-details.json";
-import type { Course } from "@/lib/types";
+import { useState, useMemo, useEffect } from "react";
+import type { CourseListItem, CourseDetail, CourseDetailResponse } from "@/lib/types";
 import { filterCourses, getFilterOptions, emptyFilters, type Filters } from "@/lib/search";
-
-interface CourseDetail {
-  programGuideTitle?: string;
-  publishedDescription?: string;
-  genericCourseType?: string;
-  gradRequirements?: { program: string; requirement: string; examinable: string }[];
-  gradElectives?: string[];
-}
-
-const detailsMap = courseDetailsData as Record<string, CourseDetail>;
-
-interface DeduplicatedCourse extends Omit<Course, "gradProgram" | "gradRequirement"> {
-  gradPrograms: { program: string; requirement: string }[];
-}
-
-const allCourses = coursesData as Course[];
-const HIGH_SCHOOL_GRADES = new Set(["09", "10", "11", "12"]);
-
-// Deduplicate: same course appears multiple times for different grad programs
-const courses: DeduplicatedCourse[] = (() => {
-  const filtered = allCourses.filter((c) => HIGH_SCHOOL_GRADES.has(c.grade));
-  const map = new Map<string, DeduplicatedCourse>();
-  for (const c of filtered) {
-    const key = `${c.code}|${c.grade}`;
-    const existing = map.get(key);
-    if (existing) {
-      if (c.gradProgram) {
-        existing.gradPrograms.push({ program: c.gradProgram, requirement: c.gradRequirement || "" });
-      }
-    } else {
-      const { gradProgram, gradRequirement, ...rest } = c;
-      map.set(key, {
-        ...rest,
-        gradPrograms: gradProgram ? [{ program: gradProgram, requirement: gradRequirement || "" }] : [],
-      });
-    }
-  }
-  return Array.from(map.values());
-})();
 
 const PAGE_SIZE = 50;
 
@@ -77,13 +36,38 @@ function getCategoryBadge(category: string) {
 }
 
 export default function Home() {
+  const [courses, setCourses] = useState<CourseListItem[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [page, setPage] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showGlossary, setShowGlossary] = useState(true);
 
-  const filterOptions = useMemo(() => getFilterOptions(courses), []);
-  const results = useMemo(() => filterCourses(courses, filters), [filters]);
+  // Per-code detail cache. `undefined` = not fetched, value (incl. null) = fetched.
+  const [detailCache, setDetailCache] = useState<Record<string, CourseDetail | null>>({});
+  const [detailLoading, setDetailLoading] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/courses")
+      .then((r) => {
+        if (!r.ok) throw new Error(`Failed to load courses (${r.status})`);
+        return r.json();
+      })
+      .then((data: CourseListItem[]) => {
+        if (!cancelled) setCourses(data);
+      })
+      .catch((e: Error) => {
+        if (!cancelled) setLoadError(e.message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const filterOptions = useMemo(() => getFilterOptions(courses ?? []), [courses]);
+  const results = useMemo(() => filterCourses(courses ?? [], filters), [courses, filters]);
   const paged = useMemo(() => results.slice(0, (page + 1) * PAGE_SIZE), [results, page]);
   const hasMore = paged.length < results.length;
 
@@ -99,7 +83,31 @@ export default function Home() {
     setExpanded(null);
   }
 
+  function toggleExpand(code: string) {
+    const next = expanded === code ? null : code;
+    setExpanded(next);
+    if (next && !(next in detailCache)) {
+      setDetailLoading(next);
+      fetch(`/api/courses/${encodeURIComponent(next)}`)
+        .then((r) => {
+          if (!r.ok) throw new Error(String(r.status));
+          return r.json();
+        })
+        .then((data: CourseDetailResponse) => {
+          setDetailCache((c) => ({ ...c, [next]: data.details }));
+        })
+        .catch(() => {
+          setDetailCache((c) => ({ ...c, [next]: null }));
+        })
+        .finally(() => {
+          setDetailLoading((cur) => (cur === next ? null : cur));
+        });
+    }
+  }
+
   const hasFilters = Object.values(filters).some(Boolean);
+  const isLoading = courses === null && !loadError;
+  const total = courses?.length ?? 0;
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
@@ -110,7 +118,7 @@ export default function Home() {
             BC Course Finder
           </h1>
           <p className="text-base text-gray-500 mt-2">
-            Explore {courses.length.toLocaleString()} British Columbia courses
+            Explore {courses ? total.toLocaleString() : "…"} British Columbia courses
           </p>
         </div>
 
@@ -168,7 +176,8 @@ export default function Home() {
               value={filters.query}
               onChange={(e) => update("query", e.target.value)}
               placeholder="Search by course title, code, or subject..."
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-gray-50 placeholder-gray-400 transition-shadow"
+              disabled={isLoading || !!loadError}
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-gray-50 placeholder-gray-400 transition-shadow disabled:opacity-60"
             />
           </div>
 
@@ -220,88 +229,110 @@ export default function Home() {
           )}
         </div>
 
-        {/* Results count */}
-        <div className="text-sm text-gray-500 mb-3 font-medium">
-          {hasFilters
-            ? `${results.length.toLocaleString()} of ${courses.length.toLocaleString()} courses`
-            : `${courses.length.toLocaleString()} courses`}
-        </div>
-
-        {/* Results */}
-        <div className="space-y-2">
-          {paged.map((course, i) => {
-            const key = `${course.code}-${course.grade}`;
-            const isExpanded = expanded === key;
-            const badge = getCategoryBadge(course.category);
-
-            return (
-              <div
-                key={key}
-                className="animate-fade-in bg-white rounded-xl shadow-sm border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all duration-200"
-              >
-                <button
-                  onClick={() => setExpanded(isExpanded ? null : key)}
-                  className="w-full px-4 sm:px-5 py-3.5 text-left flex items-center gap-4"
-                >
-                  <div className="flex-1 min-w-0">
-                    <span className="font-semibold text-gray-900 text-sm sm:text-base leading-tight block truncate">
-                      {course.title}
-                    </span>
-                    <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs font-mono text-gray-600">
-                        {course.code}
-                      </span>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-xs font-medium text-blue-700">
-                        Grade {course.grade}
-                      </span>
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-xs font-medium ${badge.color} ${badge.bg}`}>
-                        {course.category}
-                      </span>
-                      {course.credits && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-600">
-                          {course.credits} cr
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <svg
-                    className={`w-5 h-5 text-gray-400 shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-
-                {isExpanded && <CourseExpanded course={course} />}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Load more */}
-        {hasMore && (
-          <button
-            onClick={() => setPage((p) => p + 1)}
-            className="mt-5 w-full py-2.5 text-sm font-medium text-blue-600 hover:text-blue-700 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all duration-200"
-          >
-            Show more ({(results.length - paged.length).toLocaleString()} remaining)
-          </button>
+        {/* Load error */}
+        {loadError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            Couldn’t load courses: {loadError}. Please refresh to try again.
+          </div>
         )}
 
-        {results.length === 0 && hasFilters && (
-          <div className="text-center py-16">
-            <div className="text-gray-400 text-4xl mb-3">
-              <svg className="w-12 h-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            <p className="text-gray-500 text-sm font-medium">No courses match your filters</p>
-            <button onClick={reset} className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium">
-              Clear filters
-            </button>
+        {/* Loading */}
+        {isLoading && (
+          <div className="text-center py-16 text-sm text-gray-500 font-medium animate-fade-in">
+            Loading courses…
           </div>
+        )}
+
+        {/* Results */}
+        {!isLoading && !loadError && (
+          <>
+            <div className="text-sm text-gray-500 mb-3 font-medium">
+              {hasFilters
+                ? `${results.length.toLocaleString()} of ${total.toLocaleString()} courses`
+                : `${total.toLocaleString()} courses`}
+            </div>
+
+            <div className="space-y-2">
+              {paged.map((course) => {
+                const isExpanded = expanded === course.code;
+                const badge = getCategoryBadge(course.category);
+
+                return (
+                  <div
+                    key={course.code}
+                    className="animate-fade-in bg-white rounded-xl shadow-sm border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all duration-200"
+                  >
+                    <button
+                      onClick={() => toggleExpand(course.code)}
+                      className="w-full px-4 sm:px-5 py-3.5 text-left flex items-center gap-4"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <span className="font-semibold text-gray-900 text-sm sm:text-base leading-tight block truncate">
+                          {course.title}
+                        </span>
+                        <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs font-mono text-gray-600">
+                            {course.code}
+                          </span>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-xs font-medium text-blue-700">
+                            Grade {course.grade}
+                          </span>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-xs font-medium ${badge.color} ${badge.bg}`}>
+                            {course.category}
+                          </span>
+                          {course.credits && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-600">
+                              {course.credits} cr
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <svg
+                        className={`w-5 h-5 text-gray-400 shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {isExpanded && (
+                      <CourseExpanded
+                        course={course}
+                        detail={detailCache[course.code]}
+                        loading={detailLoading === course.code}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Load more */}
+            {hasMore && (
+              <button
+                onClick={() => setPage((p) => p + 1)}
+                className="mt-5 w-full py-2.5 text-sm font-medium text-blue-600 hover:text-blue-700 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all duration-200"
+              >
+                Show more ({(results.length - paged.length).toLocaleString()} remaining)
+              </button>
+            )}
+
+            {results.length === 0 && hasFilters && (
+              <div className="text-center py-16">
+                <div className="text-gray-400 text-4xl mb-3">
+                  <svg className="w-12 h-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <p className="text-gray-500 text-sm font-medium">No courses match your filters</p>
+                <button onClick={reset} className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium">
+                  Clear filters
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {/* Footer */}
@@ -342,27 +373,33 @@ function FilterSelect({
   );
 }
 
-function CourseExpanded({ course }: { course: DeduplicatedCourse }) {
-  const detail = detailsMap[course.code] || {};
-
+function CourseExpanded({
+  course,
+  detail,
+  loading,
+}: {
+  course: CourseListItem;
+  detail: CourseDetail | null | undefined;
+  loading: boolean;
+}) {
   return (
     <div className="animate-slide-down px-4 sm:px-5 pb-4 border-t border-gray-100 pt-4 space-y-4">
       {/* Published Description */}
-      {detail.publishedDescription && (
+      {detail?.publishedDescription && (
         <div className="bg-blue-50 rounded-lg px-4 py-3">
           <p className="text-sm text-gray-800 leading-relaxed">{detail.publishedDescription}</p>
         </div>
       )}
 
       {/* Program Guide Title */}
-      {detail.programGuideTitle && (
+      {detail?.programGuideTitle && (
         <div className="text-sm">
           <span className="text-[11px] uppercase tracking-wider text-gray-400 font-medium">Program Guide Title</span>
           <p className="text-gray-900 mt-0.5">{detail.programGuideTitle}</p>
         </div>
       )}
 
-      {/* Basic Details */}
+      {/* Basic Details — available from the course row itself */}
       <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
         <Detail label="Course Code" value={course.code} />
         <Detail label="Grade" value={course.grade} />
@@ -371,41 +408,15 @@ function CourseExpanded({ course }: { course: DeduplicatedCourse }) {
         <Detail label="Language" value={course.language} />
         <Detail label="Subject" value={course.subject} />
         <Detail label="Sub-category" value={course.subCategory} />
-        {course.gradPrograms.length === 1 && (
-          <>
-            <Detail label="Grad Program" value={course.gradPrograms[0].program} />
-            <Detail label="Grad Requirement" value={course.gradPrograms[0].requirement} />
-          </>
-        )}
+        <Detail label="Grad Requirement" value={course.gradRequirement} />
       </dl>
 
-      {/* Multiple Grad Programs */}
-      {course.gradPrograms.length > 1 && (
-        <div>
-          <h4 className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-2">Graduation Programs</h4>
-          <div className="rounded-lg border border-gray-200 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 text-left">
-                  <th className="px-3 py-1.5 text-xs font-medium text-gray-500">Program</th>
-                  <th className="px-3 py-1.5 text-xs font-medium text-gray-500">Requirement</th>
-                </tr>
-              </thead>
-              <tbody>
-                {course.gradPrograms.map((gp, i) => (
-                  <tr key={i} className="border-t border-gray-100">
-                    <td className="px-3 py-1.5 text-gray-900">{gp.program}</td>
-                    <td className="px-3 py-1.5 text-gray-700">{gp.requirement}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      {loading && (
+        <p className="text-xs text-gray-400 font-medium">Loading details…</p>
       )}
 
       {/* Grad Program Requirements */}
-      {detail.gradRequirements && detail.gradRequirements.length > 0 && (
+      {detail?.gradRequirements && detail.gradRequirements.length > 0 && (
         <div>
           <h4 className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-2">Graduation Program Requirements</h4>
           <div className="rounded-lg border border-gray-200 overflow-hidden">
@@ -432,7 +443,7 @@ function CourseExpanded({ course }: { course: DeduplicatedCourse }) {
       )}
 
       {/* Grad Program Electives */}
-      {detail.gradElectives && detail.gradElectives.length > 0 && (
+      {detail?.gradElectives && detail.gradElectives.length > 0 && (
         <div>
           <h4 className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-1.5">Counts as Elective In</h4>
           <div className="flex flex-wrap gap-1.5">

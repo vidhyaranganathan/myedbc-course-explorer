@@ -14,18 +14,19 @@ Search and explore British Columbia's high school courses. Helps students, paren
 git clone git@github.com:vidhyaranganathan/myedbc-course-explorer.git
 cd myedbc-course-explorer
 npm install    # automatically enables pre-push hook
+cp .env.example .env.local   # then fill in your Supabase credentials
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
+Set `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SECRET_KEY` (service_role, server-only), and `API_WRITE_SECRET` in `.env.local`. See [Getting Started](docs/onboarding/getting-started.md) for details.
+
 ## How It Works
 
-All course data is stored as static JSON files that ship with the app. When the page loads, ~5,000 deduplicated courses are available in the browser — search and filtering happen instantly with zero network requests.
+A Supabase Postgres database is the single source of truth. The browser never queries Supabase directly — all data goes through Next.js Route Handlers under `src/app/api/courses/`. On load, the app fetches `GET /api/courses` (~3,951 courses) once into the browser, then search and filtering happen in memory. Expanding a course card lazy-loads its details from `GET /api/courses/[code]`.
 
-The data comes from two sources:
-- **BC Ministry of Education** Excel file → `src/data/courses.json` (12,741 rows, deduplicated to ~5K at runtime)
-- **BC Course Registry** website → `src/data/course-details.json` (5,480 course descriptions)
+The app shows only the 2023 Graduation Program, grades 10-12. Course detail text originates from the **BC Course Registry** website (scraped, then loaded into the DB via the write API).
 
 ## Tech Stack
 
@@ -35,6 +36,7 @@ The data comes from two sources:
 | React | 19 | UI |
 | TypeScript | 6 | Type safety |
 | Tailwind CSS | 4 | Styling |
+| Supabase | Postgres | Database (source of truth) |
 | Vitest | 4 | Testing |
 | Vercel | Hobby | Deployment |
 
@@ -46,20 +48,19 @@ npm run build          # Production build
 npm run lint           # Run ESLint
 npm run test           # Run tests
 npm run test:coverage  # Run tests with coverage report
-npm run import         # Convert Excel → courses.json
+npm run db:load -- ./payload.json  # POST a JSON payload to /api/courses (gated upsert)
 ```
 
 ## Updating Course Data
 
-When you get a new Excel file from the BC Ministry of Education:
+The DB is the single source of truth — there is no committed JSON data file. To re-sync, produce a JSON payload file (snake_case rows matching the DB columns; see `scripts/load_supabase.ts` for the shape), then POST it through the write API:
 
 ```bash
-npm run import                              # reads from ~/Downloads/open_courses (1).xlsx
-npm run import -- /path/to/new-file.xlsx    # or specify a custom path
-python3 scripts/scrape-course-details.py    # scrape course descriptions (resumable)
+python3 scripts/scrape-course-details.py    # generate detail data (transient, resumable)
+npm run db:load -- ./payload.json           # POST the payload to /api/courses
 ```
 
-Commit both JSON files and redeploy.
+`POST /api/courses` is secret-gated: the request must send `X-Api-Key` equal to env `API_WRITE_SECRET`. This is the only write path. No JSON data files are committed.
 
 ## Project Structure
 
@@ -69,13 +70,12 @@ src/
 │   ├── page.tsx          # Single-page app (search, filters, course list)
 │   ├── layout.tsx        # Root layout
 │   ├── globals.css       # Tailwind + animations
-│   └── api/import/       # Dev-only Excel upload endpoint
+│   └── api/courses/      # DB gateway: GET (list), GET [code] (one+details), POST (gated upsert)
 ├── lib/
-│   ├── search.ts         # Client-side filtering engine
-│   └── types.ts          # Course type definitions
-└── data/
-    ├── courses.json      # Generated from Excel
-    └── course-details.json  # Scraped from BC Course Registry
+│   ├── search.ts         # In-memory filtering engine
+│   ├── supabase-server.ts  # Server-only Supabase client (service_role key)
+│   ├── courses-mapper.ts   # Maps DB snake_case rows ↔ API camelCase shapes
+│   └── types.ts          # Course / CourseDetail type definitions
 
 docs/
 ├── onboarding/           # Getting started, data pipeline
@@ -84,7 +84,8 @@ docs/
 └── roadmap/              # Feature roadmap, tech debt
 
 scripts/
-├── convert-excel.ts      # Excel → JSON conversion
+├── load_supabase.ts      # Reads a JSON payload and POSTs it to /api/courses
+├── migrate.sql           # Supabase schema DDL (run once in SQL Editor)
 └── scrape-course-details.py  # Course details scraper
 ```
 
