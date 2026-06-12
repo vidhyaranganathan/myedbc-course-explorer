@@ -198,6 +198,34 @@ describe("Home page — expand & lazy detail", () => {
     const expandedArea = screen.getByText("Business Education 12").closest("button")!.parentElement!;
     expect(within(expandedArea).queryByText("Sub-category")).not.toBeInTheDocument();
   });
+
+  it("shows a retry on detail-fetch failure, then recovers (no permanent poisoning)", async () => {
+    cleanup();
+    let failDetail = true;
+    installFetch((url) => {
+      if (url === "/api/courses") return okJson(LIST);
+      const m = url.match(/^\/api\/courses\/(.+)$/);
+      if (m) {
+        if (failDetail) {
+          return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as Response);
+        }
+        const code = decodeURIComponent(m[1]);
+        const course = LIST.find((c) => c.code === code)!;
+        return okJson({ course, details: DETAILS[code] ?? null });
+      }
+      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
+    });
+    render(<Home />);
+    await screen.findByText("Mathematics 10");
+    fireEvent.click(screen.getByText("Mathematics 10").closest("button")!);
+    expect(await screen.findByText(/Couldn.t load details/)).toBeInTheDocument();
+    // the failure must NOT be cached as "no details" — retry re-fetches and succeeds
+    failDetail = false;
+    fireEvent.click(screen.getByText("Retry"));
+    expect(
+      await screen.findByText("An introduction to foundational mathematics concepts.")
+    ).toBeInTheDocument();
+  });
 });
 
 async function renderLoadedReturningFetch() {

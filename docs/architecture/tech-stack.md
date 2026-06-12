@@ -24,8 +24,7 @@
 | ESLint | Linting |
 | Vitest | Unit and component tests |
 | React Testing Library | Component test utilities |
-| tsx | Running TypeScript scripts (Excel conversion, DB seed) |
-| xlsx | Parsing Excel files (devDependency only) |
+| tsx | Running TypeScript scripts (DB load) |
 
 ## Deployment
 
@@ -40,5 +39,4 @@
 - **No CSS-in-JS**: Tailwind handles all styling with utility classes
 - **No state management library**: React's `useState` + `useMemo` is sufficient
 - **Vitest + React Testing Library**: 41 tests at ~77% coverage
-- **xlsx in devDependencies**: Has known vulnerabilities but is only used in the local import script, never shipped to production
 - **Supabase over plain Postgres**: Managed hosting, free tier, built-in JS client, compatible with Vercel Hobby

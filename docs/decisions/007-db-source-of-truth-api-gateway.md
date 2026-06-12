@@ -68,7 +68,7 @@ JSON files and allowed direct browser/script DB access.
 - Refreshing `course_details` now means assembling a payload and POSTing it
   through the write API. The old scraper has been removed, so there is no
   built-in regeneration path — the DB holds the only copy.
-- Requires `.env.local` (and Vercel env vars) for `NEXT_PUBLIC_SUPABASE_URL`,
+- Requires `.env.local` (and Vercel env vars) for `SUPABASE_URL`,
   `SUPABASE_SECRET_KEY`, and `API_WRITE_SECRET` — local setup is heavier.
 
 **When to revisit:**

@@ -36,13 +36,8 @@ jobs:
             ISSUES=$((ISSUES + 1))
           fi
 
-          # Check data counts
-          COURSES=$(node -e "console.log(require('./src/data/courses.json').length)")
-          DETAILS=$(node -e "console.log(Object.keys(require('./src/data/course-details.json')).length)")
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Data counts" >> $GITHUB_STEP_SUMMARY
-          echo "- courses.json: $COURSES entries" >> $GITHUB_STEP_SUMMARY
-          echo "- course-details.json: $DETAILS entries" >> $GITHUB_STEP_SUMMARY
+          # Course data now lives in Supabase (the DB is the source of truth, ADR-007);
+          # there are no committed data files to count here.
 
           # Check for stale counts in docs
           if grep -r "12,741\|12741" docs/ CLAUDE.md 2>/dev/null | grep -v "12,741 rows\|12741 rows" | grep -v tech-debt; then

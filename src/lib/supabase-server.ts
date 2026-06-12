@@ -12,11 +12,11 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  * route handler rather than crashing at module load (and so tests can mock it).
  */
 export function createServerClient(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY;
   if (!url || !key) {
     throw new Error(
-      "Missing Supabase env vars: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY must be set"
+      "Missing Supabase env vars: SUPABASE_URL and SUPABASE_SECRET_KEY must be set"
     );
   }
   return createClient(url, key, { auth: { persistSession: false } });

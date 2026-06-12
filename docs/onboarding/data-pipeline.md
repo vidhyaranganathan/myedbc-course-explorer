@@ -78,7 +78,7 @@ Documented in `.env.example` (copy to `.env.local`). All three are read **server
 
 | Var | Purpose |
 |-----|---------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_SECRET_KEY` | service_role key — used only by the server-side route handlers |
 | `API_WRITE_SECRET` | shared secret that gates `POST /api/courses` (sent as `X-Api-Key`) |
 

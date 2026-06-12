@@ -7,10 +7,18 @@ import {
   toCourseDetail,
 } from "@/lib/courses-mapper";
 
+function serverError(context: string, err: unknown): NextResponse {
+  console.error(`[api/courses/[code]] ${context}:`, err);
+  return NextResponse.json({ error: "internal server error" }, { status: 500 });
+}
+
 /**
  * GET /api/courses/[code] — one course + its details (for the expanded card).
- * `code` is globally unique in this dataset (see ADR-008), so this returns a
- * single object, not an array.
+ *
+ * `code` is effectively unique in this dataset, but the table PK is (code, grade);
+ * to stay correct even if a code ever spans grades we take the lowest-grade row
+ * (`.limit(1)`) instead of erroring on multiple matches. `course_details` is keyed
+ * by `code` alone.
  */
 export async function GET(
   _request: Request,
@@ -20,14 +28,14 @@ export async function GET(
   try {
     const supabase = createServerClient();
 
-    const { data: courseRow, error: courseError } = await supabase
+    const { data: courseRows, error: courseError } = await supabase
       .from("courses")
       .select(COURSE_COLUMNS)
       .eq("code", code)
-      .maybeSingle();
-    if (courseError) {
-      return NextResponse.json({ error: courseError.message }, { status: 500 });
-    }
+      .order("grade", { ascending: true })
+      .limit(1);
+    if (courseError) return serverError("course lookup", courseError);
+    const courseRow = courseRows?.[0];
     if (!courseRow) {
       return NextResponse.json({ error: "not found" }, { status: 404 });
     }
@@ -37,15 +45,13 @@ export async function GET(
       .select(COURSE_DETAIL_COLUMNS)
       .eq("code", code)
       .maybeSingle();
-    if (detailError) {
-      return NextResponse.json({ error: detailError.message }, { status: 500 });
-    }
+    if (detailError) return serverError("detail lookup", detailError);
 
     return NextResponse.json({
       course: toCourseListItem(courseRow),
       details: detailRow ? toCourseDetail(detailRow) : null,
     });
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+    return serverError("GET by code", err);
   }
 }

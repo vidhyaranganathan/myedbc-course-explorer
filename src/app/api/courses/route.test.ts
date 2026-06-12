@@ -7,21 +7,26 @@ vi.mock("@/lib/supabase-server", () => ({ createServerClient: vi.fn() }));
 import { createServerClient } from "@/lib/supabase-server";
 import { GET, POST } from "./route";
 
-type Result = { data?: unknown; error: { message: string } | null };
+type Result = { data?: unknown; error: { message: string } | null; count?: number };
+type UpsertCall = { table: string; rows: unknown[]; options: { onConflict?: string } };
 
 interface Builder {
   select: () => Builder;
   eq: () => Builder;
   order: () => Builder;
   range: () => Builder;
+  limit: () => Builder;
   maybeSingle: () => Promise<Result>;
-  upsert: () => Promise<Result>;
+  upsert: (rows: unknown[], options: { onConflict?: string }) => Promise<Result>;
   then: (res: (v: Result) => unknown, rej?: (e: unknown) => unknown) => Promise<unknown>;
 }
 
 // A table's value may be a single Result, or an array of Results consumed one
 // per terminal call (to simulate paginated reads across multiple .range() loops).
-function mockSupabase(byTable: Record<string, Result | Result[]>): SupabaseClient {
+function mockSupabase(
+  byTable: Record<string, Result | Result[]>,
+  upsertCalls?: UpsertCall[]
+): SupabaseClient {
   const counters: Record<string, number> = {};
   const make = (table: string): Builder => {
     const spec = byTable[table] ?? { data: [], error: null };
@@ -36,19 +41,21 @@ function mockSupabase(byTable: Record<string, Result | Result[]>): SupabaseClien
       eq: () => builder,
       order: () => builder,
       range: () => builder,
+      limit: () => builder,
       maybeSingle: () => Promise.resolve(next()),
-      upsert: () => Promise.resolve(next()),
+      upsert: (rows, options) => {
+        upsertCalls?.push({ table, rows, options });
+        return Promise.resolve(next());
+      },
       then: (res, rej) => Promise.resolve(next()).then(res, rej),
     };
     return builder;
   };
-  return {
-    from: (table: string) => make(table),
-  } as unknown as SupabaseClient;
+  return { from: (table: string) => make(table) } as unknown as SupabaseClient;
 }
 
-function setClient(byTable: Record<string, Result | Result[]>) {
-  vi.mocked(createServerClient).mockReturnValue(mockSupabase(byTable));
+function setClient(byTable: Record<string, Result | Result[]>, upsertCalls?: UpsertCall[]) {
+  vi.mocked(createServerClient).mockReturnValue(mockSupabase(byTable, upsertCalls));
 }
 
 function courseRow(code: string) {
@@ -96,15 +103,14 @@ describe("GET /api/courses", () => {
     ]);
   });
 
-  it("returns 500 when the DB errors", async () => {
-    setClient({ courses: { data: null, error: { message: "boom" } } });
+  it("returns a generic 500 (no DB internals) when the DB errors", async () => {
+    setClient({ courses: { data: null, error: { message: "relation courses does not exist" } } });
     const res = await GET();
     expect(res.status).toBe(500);
-    expect(await res.json()).toEqual({ error: "boom" });
+    expect(await res.json()).toEqual({ error: "internal server error" });
   });
 
   it("pages past the 1000-row PostgREST cap", async () => {
-    // First page is a full 1000 rows → loop continues; second page is short → stop.
     const fullPage = Array.from({ length: 1000 }, (_, i) => courseRow(`C${i}`));
     const shortPage = [courseRow("LAST1"), courseRow("LAST2")];
     setClient({
@@ -131,12 +137,12 @@ function postReq(body: string, headers: Record<string, string> = {}) {
 
 describe("POST /api/courses", () => {
   it("returns 401 with no secret header", async () => {
-    const res = await POST(postReq(JSON.stringify({ courses: [] })));
+    const res = await POST(postReq(JSON.stringify({ courses: [{ code: "X" }] })));
     expect(res.status).toBe(401);
   });
 
   it("returns 401 with a wrong secret", async () => {
-    const res = await POST(postReq(JSON.stringify({ courses: [] }), { "x-api-key": "nope" }));
+    const res = await POST(postReq(JSON.stringify({ courses: [{ code: "X" }] }), { "x-api-key": "nope" }));
     expect(res.status).toBe(401);
   });
 
@@ -150,11 +156,14 @@ describe("POST /api/courses", () => {
     expect(res.status).toBe(400);
   });
 
-  it("upserts courses and details and returns counts", async () => {
-    setClient({
-      courses: { error: null },
-      course_details: { error: null },
-    });
+  it("returns 400 when both arrays are empty (no silent no-op)", async () => {
+    const res = await POST(postReq(JSON.stringify({ courses: [], courseDetails: [] }), { "x-api-key": SECRET }));
+    expect(res.status).toBe(400);
+  });
+
+  it("upserts courses and details with the right onConflict keys and returns counts", async () => {
+    const calls: UpsertCall[] = [];
+    setClient({ courses: { error: null }, course_details: { error: null } }, calls);
     const res = await POST(
       postReq(
         JSON.stringify({
@@ -166,14 +175,29 @@ describe("POST /api/courses", () => {
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ upserted: { courses: 1, courseDetails: 2 } });
+    // assert the handler actually sent the rows with correct conflict targets
+    expect(calls).toContainEqual({ table: "courses", rows: [{ code: "MA10", grade: "10" }], options: { onConflict: "code,grade", count: "exact" } });
+    expect(calls).toContainEqual({ table: "course_details", rows: [{ code: "MA10" }, { code: "EN10" }], options: { onConflict: "code", count: "exact" } });
   });
 
-  it("returns 500 when an upsert errors", async () => {
-    setClient({ courses: { error: { message: "constraint violation" } } });
+  it("batches large course arrays into BATCH_SIZE chunks", async () => {
+    const calls: UpsertCall[] = [];
+    setClient({ courses: { error: null } }, calls);
+    const rows = Array.from({ length: 450 }, (_, i) => ({ code: `C${i}`, grade: "10" }));
+    const res = await POST(postReq(JSON.stringify({ courses: rows }), { "x-api-key": SECRET }));
+    expect(res.status).toBe(200);
+    const courseCalls = calls.filter((c) => c.table === "courses");
+    expect(courseCalls).toHaveLength(3); // 200 + 200 + 50
+    expect(courseCalls[0].rows).toHaveLength(200);
+    expect(courseCalls[2].rows).toHaveLength(50);
+  });
+
+  it("returns a generic 500 (no DB internals) when an upsert errors", async () => {
+    setClient({ courses: { error: { message: "duplicate key value violates unique constraint" } } });
     const res = await POST(
       postReq(JSON.stringify({ courses: [{ code: "X" }] }), { "x-api-key": SECRET })
     );
     expect(res.status).toBe(500);
-    expect(await res.json()).toEqual({ error: "constraint violation" });
+    expect(await res.json()).toEqual({ error: "internal server error" });
   });
 });

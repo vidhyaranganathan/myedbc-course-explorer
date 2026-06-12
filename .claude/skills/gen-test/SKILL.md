@@ -25,16 +25,16 @@ If no file is specified, find the most recently modified `.ts` or `.tsx` file un
 - No mocking needed for pure functions
 
 ### For app/ component files:
-- Import from vitest + testing-library: `describe`, `it`, `expect`, `vi`, `render`, `screen`, `fireEvent`, `cleanup`
-- Mock `@/data/courses.json` and `@/data/course-details.json` with small realistic datasets (5-7 entries)
-- Use a `renderComponent()` helper that calls `cleanup()` then `render()`
-- Test: renders correctly, user interactions, conditional rendering, edge cases
+- Import from vitest + testing-library: `describe`, `it`, `expect`, `vi`, `render`, `screen`, `fireEvent`, `cleanup`, `waitFor`
+- Mock `global.fetch` to return the API responses the component fetches (e.g. `GET /api/courses` → a small `CourseListItem[]`, `GET /api/courses/[code]` → `{ course, details }`). Data comes from the API, not committed JSON files.
+- Use a helper that installs the fetch mock, renders, then `await screen.findByText(...)` for the first item (the initial load is async). See `src/app/page.test.tsx` for the pattern.
+- Test: loading/error/empty states, user interactions, conditional rendering, lazy detail load + retry on failure
 - Use `screen.getByText`, `screen.getByRole`, `screen.getByPlaceholderText` — prefer accessible queries
 
 ### For api/ route files:
-- Test the exported HTTP handler function
-- Mock filesystem operations and external dependencies
-- Test: success path, error responses, input validation, edge cases
+- Test the exported HTTP handler(s) (`GET`, `POST`, etc.)
+- `vi.mock("@/lib/supabase-server")` and return a fake Supabase query builder (a chainable thenable exposing `select`/`eq`/`order`/`range`/`limit`/`maybeSingle`/`upsert`). See `src/app/api/courses/route.test.ts`.
+- Test: success path + mapped output, auth (401), input validation (400), not-found (404), and DB-error (generic 500) paths; for writes, assert the upsert args (rows, `onConflict`) and batching
 
 4. **Run the tests** with `npm run test -- <test-file-path>` to verify they pass
 5. **Run coverage** with `npm run test:coverage` and report the coverage change

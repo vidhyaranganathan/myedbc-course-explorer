@@ -21,7 +21,7 @@ npm install
 
 # Copy the env template and fill in your credentials
 cp .env.example .env.local
-# Edit .env.local and set NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SECRET_KEY, and API_WRITE_SECRET
+# Edit .env.local and set SUPABASE_URL, SUPABASE_SECRET_KEY, and API_WRITE_SECRET
 
 # Start the dev server
 npm run dev
@@ -35,7 +35,7 @@ All three are read **server-side only** — none are exposed to the browser.
 
 | Var | Purpose |
 |-----|---------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_SECRET_KEY` | service_role key — used only by the API route handlers |
 | `API_WRITE_SECRET` | shared secret that gates `POST /api/courses` (sent as the `X-Api-Key` header) |
 

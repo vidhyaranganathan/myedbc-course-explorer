@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import type { CourseListItem, CourseDetail, CourseDetailResponse } from "@/lib/types";
 import { filterCourses, getFilterOptions, emptyFilters, type Filters } from "@/lib/search";
 
@@ -44,9 +44,22 @@ export default function Home() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showGlossary, setShowGlossary] = useState(true);
 
-  // Per-code detail cache. `undefined` = not fetched, value (incl. null) = fetched.
+  // Per-code detail cache. A code present in `detailCache` was fetched successfully
+  // (value may be null = the course genuinely has no details). `detailError` tracks
+  // codes whose fetch failed — kept separate so failures stay retryable and are not
+  // confused with "no details".
   const [detailCache, setDetailCache] = useState<Record<string, CourseDetail | null>>({});
+  const [detailError, setDetailError] = useState<Record<string, boolean>>({});
   const [detailLoading, setDetailLoading] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+  const inFlightRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +78,34 @@ export default function Home() {
       cancelled = true;
     };
   }, []);
+
+  function fetchDetail(code: string) {
+    if (code in detailCache) return; // already have a successful result
+    if (inFlightRef.current.has(code)) return; // already fetching
+    inFlightRef.current.add(code);
+    setDetailLoading(code);
+    setDetailError((e) => {
+      if (!e[code]) return e;
+      const nextErr = { ...e };
+      delete nextErr[code];
+      return nextErr;
+    });
+    fetch(`/api/courses/${encodeURIComponent(code)}`)
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
+      .then((data: CourseDetailResponse) => {
+        if (mountedRef.current) setDetailCache((c) => ({ ...c, [code]: data.details }));
+      })
+      .catch(() => {
+        if (mountedRef.current) setDetailError((e) => ({ ...e, [code]: true }));
+      })
+      .finally(() => {
+        inFlightRef.current.delete(code);
+        if (mountedRef.current) setDetailLoading((cur) => (cur === code ? null : cur));
+      });
+  }
 
   const filterOptions = useMemo(() => getFilterOptions(courses ?? []), [courses]);
   const results = useMemo(() => filterCourses(courses ?? [], filters), [courses, filters]);
@@ -86,23 +127,7 @@ export default function Home() {
   function toggleExpand(code: string) {
     const next = expanded === code ? null : code;
     setExpanded(next);
-    if (next && !(next in detailCache)) {
-      setDetailLoading(next);
-      fetch(`/api/courses/${encodeURIComponent(next)}`)
-        .then((r) => {
-          if (!r.ok) throw new Error(String(r.status));
-          return r.json();
-        })
-        .then((data: CourseDetailResponse) => {
-          setDetailCache((c) => ({ ...c, [next]: data.details }));
-        })
-        .catch(() => {
-          setDetailCache((c) => ({ ...c, [next]: null }));
-        })
-        .finally(() => {
-          setDetailLoading((cur) => (cur === next ? null : cur));
-        });
-    }
+    if (next) fetchDetail(next);
   }
 
   const hasFilters = Object.values(filters).some(Boolean);
@@ -302,6 +327,8 @@ export default function Home() {
                         course={course}
                         detail={detailCache[course.code]}
                         loading={detailLoading === course.code}
+                        errored={!!detailError[course.code]}
+                        onRetry={() => fetchDetail(course.code)}
                       />
                     )}
                   </div>
@@ -377,10 +404,14 @@ function CourseExpanded({
   course,
   detail,
   loading,
+  errored,
+  onRetry,
 }: {
   course: CourseListItem;
   detail: CourseDetail | null | undefined;
   loading: boolean;
+  errored: boolean;
+  onRetry: () => void;
 }) {
   return (
     <div className="animate-slide-down px-4 sm:px-5 pb-4 border-t border-gray-100 pt-4 space-y-4">
@@ -413,6 +444,15 @@ function CourseExpanded({
 
       {loading && (
         <p className="text-xs text-gray-400 font-medium">Loading details…</p>
+      )}
+
+      {errored && !loading && (
+        <p className="text-xs text-red-600 font-medium">
+          Couldn’t load details.{" "}
+          <button onClick={onRetry} className="underline hover:text-red-700">
+            Retry
+          </button>
+        </p>
       )}
 
       {/* Grad Program Requirements */}

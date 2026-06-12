@@ -20,7 +20,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-Set `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SECRET_KEY` (service_role, server-only), and `API_WRITE_SECRET` in `.env.local`. See [Getting Started](docs/onboarding/getting-started.md) for details.
+Set `SUPABASE_URL`, `SUPABASE_SECRET_KEY` (service_role, server-only), and `API_WRITE_SECRET` in `.env.local`. See [Getting Started](docs/onboarding/getting-started.md) for details.
 
 ## How It Works
 

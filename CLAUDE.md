@@ -70,7 +70,7 @@ The DB is the single source of truth — there is no Excel and no committed JSON
 2. Run `npm run db:load -- ./payload.json` to POST it to `/api/courses`, which performs the gated upsert.
 3. Schema is created once via `scripts/migrate.sql` in the Supabase SQL Editor.
 
-Env vars (see `.env.example`, all server-only): `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SECRET_KEY` (service_role), `API_WRITE_SECRET`. There is no anon/publishable key in use.
+Env vars (see `.env.example`, all server-only): `SUPABASE_URL`, `SUPABASE_SECRET_KEY` (service_role), `API_WRITE_SECRET`. There is no anon/publishable key in use.
 
 ## Course Data Fields
 

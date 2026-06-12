@@ -11,7 +11,10 @@ type Result = { data?: unknown; error: { message: string } | null };
 interface Builder {
   select: () => Builder;
   eq: () => Builder;
+  order: () => Builder;
+  limit: () => Builder;
   maybeSingle: () => Promise<Result>;
+  then: (res: (v: Result) => unknown, rej?: (e: unknown) => unknown) => Promise<unknown>;
 }
 
 function mockSupabase(byTable: Record<string, Result>): SupabaseClient {
@@ -19,7 +22,10 @@ function mockSupabase(byTable: Record<string, Result>): SupabaseClient {
     const builder: Builder = {
       select: () => builder,
       eq: () => builder,
+      order: () => builder,
+      limit: () => builder,
       maybeSingle: () => Promise.resolve(result),
+      then: (res, rej) => Promise.resolve(result).then(res, rej),
     };
     return builder;
   };
@@ -42,11 +48,11 @@ describe("GET /api/courses/[code]", () => {
   it("returns the course merged with its details", async () => {
     setClient({
       courses: {
-        data: {
+        data: [{
           code: "MA10", grade: "10", title: "Mathematics 10", credits: "4",
           category: "Ministry", language: "English", subject: "Mathematics",
           sub_category: null, grad_requirement: "Required",
-        },
+        }],
         error: null,
       },
       course_details: {
@@ -72,11 +78,11 @@ describe("GET /api/courses/[code]", () => {
   it("returns the course with null details when none exist", async () => {
     setClient({
       courses: {
-        data: {
+        data: [{
           code: "BA12", grade: "12", title: "Business 12", credits: null,
           category: "Board Authority Authorized", language: "English",
           subject: null, sub_category: null, grad_requirement: null,
-        },
+        }],
         error: null,
       },
       course_details: { data: null, error: null },
@@ -89,15 +95,15 @@ describe("GET /api/courses/[code]", () => {
   });
 
   it("returns 404 when the course is not found", async () => {
-    setClient({ courses: { data: null, error: null } });
+    setClient({ courses: { data: [], error: null } });
     const res = await GET(new Request("http://localhost/api/courses/NOPE"), ctx("NOPE"));
     expect(res.status).toBe(404);
   });
 
-  it("returns 500 when the course query errors", async () => {
-    setClient({ courses: { data: null, error: { message: "db down" } } });
+  it("returns a generic 500 (no DB internals) when the course query errors", async () => {
+    setClient({ courses: { data: null, error: { message: "connection terminated unexpectedly" } } });
     const res = await GET(new Request("http://localhost/api/courses/X"), ctx("X"));
     expect(res.status).toBe(500);
-    expect(await res.json()).toEqual({ error: "db down" });
+    expect(await res.json()).toEqual({ error: "internal server error" });
   });
 });

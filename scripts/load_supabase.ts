@@ -23,6 +23,8 @@
  * Env (.env.local):
  *   API_BASE_URL      base URL of the running app (default http://localhost:3000)
  *   API_WRITE_SECRET  shared secret sent as the X-Api-Key header
+ *
+ * (No Supabase URL/key here — this script only talks to the HTTP API.)
  */
 
 import * as fs from "fs";

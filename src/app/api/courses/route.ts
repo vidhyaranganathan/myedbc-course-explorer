@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerClient } from "@/lib/supabase-server";
 import { COURSE_COLUMNS, toCourseListItem } from "@/lib/courses-mapper";
 import type { CourseUpsertBody } from "@/lib/types";
@@ -6,11 +8,46 @@ import type { CourseUpsertBody } from "@/lib/types";
 const BATCH_SIZE = 200; // upsert batch size for writes
 const READ_PAGE_SIZE = 1000; // PostgREST caps a select at ~1000 rows; page through for reads
 
+/** Generic 500 — log the real error server-side, never leak DB internals to the client. */
+function serverError(context: string, err: unknown): NextResponse {
+  console.error(`[api/courses] ${context}:`, err);
+  return NextResponse.json({ error: "internal server error" }, { status: 500 });
+}
+
+/** Constant-time secret comparison to avoid a timing side-channel on API_WRITE_SECRET. */
+function secretMatches(provided: string | null, expected: string | undefined): boolean {
+  if (!expected || !provided) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+/** Upsert rows in batches; returns the affected-row count, or throws on DB error. */
+async function upsertBatches(
+  supabase: SupabaseClient,
+  table: string,
+  rows: object[],
+  onConflict: string
+): Promise<number> {
+  let count = 0;
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    const { error, count: affected } = await supabase
+      .from(table)
+      .upsert(batch, { onConflict, count: "exact" });
+    if (error) throw error;
+    count += affected ?? batch.length;
+  }
+  return count;
+}
+
 /**
  * GET /api/courses — all courses (no details). Feeds the grid + in-memory filtering.
  *
- * PostgREST caps a single select at ~1000 rows, so we page through with .range()
- * (ordered by code for stable paging) until a short page signals the end.
+ * PostgREST caps a single select at ~1000 rows, so we page through with .range().
+ * Ordered by (code, grade) — the full primary key — so paging is stable even if a
+ * code ever spans multiple grades.
  */
 export async function GET() {
   try {
@@ -21,17 +58,20 @@ export async function GET() {
         .from("courses")
         .select(COURSE_COLUMNS)
         .order("code", { ascending: true })
+        .order("grade", { ascending: true })
         .range(from, from + READ_PAGE_SIZE - 1);
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
+      if (error) return serverError("GET list", error);
       const page = data ?? [];
       all.push(...page);
       if (page.length < READ_PAGE_SIZE) break;
     }
-    return NextResponse.json(all.map(toCourseListItem));
+    // Course data changes only on re-sync, so let the CDN cache the full list briefly.
+    // This caps repeated DB round-trips from the public endpoint (cost/DoS guard).
+    return NextResponse.json(all.map(toCourseListItem), {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+    });
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+    return serverError("GET list", err);
   }
 }
 
@@ -41,8 +81,7 @@ export async function GET() {
  * Header: X-Api-Key must equal API_WRITE_SECRET.
  */
 export async function POST(request: NextRequest) {
-  const secret = process.env.API_WRITE_SECRET;
-  if (!secret || request.headers.get("x-api-key") !== secret) {
+  if (!secretMatches(request.headers.get("x-api-key"), process.env.API_WRITE_SECRET)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -53,42 +92,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
 
-  const courses = body?.courses;
-  const courseDetails = body?.courseDetails;
-  if (!Array.isArray(courses) && !Array.isArray(courseDetails)) {
+  const courses = Array.isArray(body?.courses) ? body.courses : [];
+  const courseDetails = Array.isArray(body?.courseDetails) ? body.courseDetails : [];
+  if (courses.length === 0 && courseDetails.length === 0) {
     return NextResponse.json(
-      { error: "body must include a `courses` and/or `courseDetails` array" },
+      { error: "body must include a non-empty `courses` and/or `courseDetails` array" },
       { status: 400 }
     );
   }
 
   try {
     const supabase = createServerClient();
-    let upsertedCourses = 0;
-    let upsertedDetails = 0;
-
-    if (Array.isArray(courses) && courses.length > 0) {
-      for (let i = 0; i < courses.length; i += BATCH_SIZE) {
-        const batch = courses.slice(i, i + BATCH_SIZE);
-        const { error } = await supabase.from("courses").upsert(batch, { onConflict: "code,grade" });
-        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-        upsertedCourses += batch.length;
-      }
-    }
-
-    if (Array.isArray(courseDetails) && courseDetails.length > 0) {
-      for (let i = 0; i < courseDetails.length; i += BATCH_SIZE) {
-        const batch = courseDetails.slice(i, i + BATCH_SIZE);
-        const { error } = await supabase.from("course_details").upsert(batch, { onConflict: "code" });
-        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-        upsertedDetails += batch.length;
-      }
-    }
-
+    const upsertedCourses = await upsertBatches(supabase, "courses", courses, "code,grade");
+    const upsertedDetails = await upsertBatches(supabase, "course_details", courseDetails, "code");
     return NextResponse.json({
       upserted: { courses: upsertedCourses, courseDetails: upsertedDetails },
     });
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+    return serverError("POST upsert", err);
   }
 }
