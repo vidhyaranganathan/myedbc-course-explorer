@@ -120,7 +120,7 @@ Course data lives in Supabase, not in committed files. There are no `src/data/*.
 
 - **Read**: the app fetches `GET /api/courses` (the grid) and `GET /api/courses/[code]` (details when a card expands).
 - **Write**: the only write path is `POST /api/courses` (secret-gated by the `X-Api-Key` header, which must match env `API_WRITE_SECRET`).
-- **Re-sync**: produce a JSON payload file, then run `npm run db:load -- ./payload.json` to POST it through the API. `python3 scripts/scrape-course-details.py` can generate detail data, but its output is a transient payload, not a committed file.
+- **Re-sync**: produce a JSON payload file, then run `npm run db:load -- ./payload.json` to POST it through the API.
 
 See the [Data Pipeline](docs/onboarding/data-pipeline.md) doc for details.
 

@@ -15,9 +15,11 @@ Runtime read path (browser → API → DB):
 Write path (the ONLY way data enters the DB):
 
   payload.json ──▶ npm run db:load ──▶ POST /api/courses ──▶ Supabase (gated upsert)
-  (transient,        (load_supabase.ts)   (X-Api-Key must
+  (assembled,        (load_supabase.ts)   (X-Api-Key must
    not committed)                          equal API_WRITE_SECRET)
 ```
+
+The DB holds the **only** copy of course detail data. There is no scraper or other regeneration path — refreshing details means assembling a payload and POSTing it through the write API.
 
 ## Runtime Data Flow
 
@@ -33,40 +35,14 @@ The app shows only the **2023 Graduation Program, grades 10-12** (~3,951 courses
 
 ## Producing Data
 
-### Course details scraper (`scripts/scrape-course-details.py`)
-
-The scraper still exists — it scrapes per-course details from the BC Course Registry website. Its output is now a **transient payload file**, not a committed data file: it is fed into the DB via the write API and then discarded.
-
-#### How the scraper works
-
-```
-1. Get the list of course codes to scrape
-2. Skip already-scraped codes (resumable)
-3. For each new code:
-   a. POST to run-search.php to establish a cookie session
-   b. GET run-details.php?courseCode={code}
-   c. Parse HTML with regex → extract title, description, type, grad data
-   d. Save progress periodically (resumable)
-   e. Rate-limited (~3 req/s)
-   f. Session refreshes periodically
-4. Write the payload file
-```
-
-The scraper resumes automatically — re-running skips already-scraped codes.
-
-#### Limitations
-
-- **Regex-based HTML parsing** — fragile if the BC Course Registry changes its HTML structure
-- **Some courses have no description** — the registry returned empty results (mostly French-language and newer courses)
-- **Cookie/session dependent** — requires a search session before detail pages work
-- **Single-threaded** — takes a while to scrape all codes from scratch at ~3 req/s
+The DB holds the only copy of course detail data — there is no scraper or other regeneration path. Refreshing details means assembling a JSON payload file (snake_case rows matching the DB columns) and POSTing it through the write API. Some courses have no published description — the BC Course Registry returned empty results (mostly French-language and newer courses).
 
 ## Loading Data (re-sync)
 
 `scripts/load_supabase.ts` is a thin client: it reads a JSON payload file and POSTs it to `/api/courses`. It does **not** write to Supabase directly.
 
 ```bash
-# 1. Produce a payload file (e.g. via the scraper, or any upstream process)
+# 1. Assemble a payload file from any upstream process
 # 2. POST it through the write API:
 npm run db:load -- ./payload.json
 ```
@@ -94,7 +70,7 @@ Tables are created once by running `scripts/migrate.sql` in the Supabase SQL Edi
 | Table | Primary Key | Notes |
 |-------|-------------|-------|
 | `courses` | `(code, grade)` | 2023 Graduation Program, grades 10-12 (~3,951 rows) |
-| `course_details` | `code` | Scraped detail text, loaded via the write API |
+| `course_details` | `code` | Detail text, loaded via the write API |
 
 ## Environment Variables
 

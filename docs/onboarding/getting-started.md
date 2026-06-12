@@ -6,7 +6,6 @@ Welcome to BC Course Finder! This guide will get you up and running.
 
 - **Node.js** 18+ (recommended: use [nvm](https://github.com/nvm-sh/nvm))
 - **npm** (comes with Node.js)
-- **Python 3** (only needed if you're regenerating course details data)
 - **Git**
 - **Supabase project** (free tier) — the database is the source of truth and powers the API layer
 
@@ -72,14 +71,6 @@ npm run build
 ```bash
 npm run lint
 ```
-
-### Regenerate course details (scraper)
-
-```bash
-python3 scripts/scrape-course-details.py
-```
-
-This script is resumable — if interrupted, it picks up where it left off. Its output is a transient payload, not a committed file; load it into the DB via the write API (below).
 
 ### Load data into the database
 

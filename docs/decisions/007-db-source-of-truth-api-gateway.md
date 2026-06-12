@@ -65,8 +65,9 @@ JSON files and allowed direct browser/script DB access.
   means an empty UI. (Mitigated by loading/error states.)
 - Course detail now requires a second request on card expand (lazy `GET [code]`),
   versus the old synchronous in-memory lookup.
-- Re-running the scraper to refresh `course_details` requires routing its output
-  through the write API rather than committing a JSON file.
+- Refreshing `course_details` now means assembling a payload and POSTing it
+  through the write API. The old scraper has been removed, so there is no
+  built-in regeneration path — the DB holds the only copy.
 - Requires `.env.local` (and Vercel env vars) for `NEXT_PUBLIC_SUPABASE_URL`,
   `SUPABASE_SECRET_KEY`, and `API_WRITE_SECRET` — local setup is heavier.
 

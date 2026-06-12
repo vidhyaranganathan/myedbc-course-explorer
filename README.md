@@ -26,7 +26,7 @@ Set `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SECRET_KEY` (service_role, server-only
 
 A Supabase Postgres database is the single source of truth. The browser never queries Supabase directly — all data goes through Next.js Route Handlers under `src/app/api/courses/`. On load, the app fetches `GET /api/courses` (~3,951 courses) once into the browser, then search and filtering happen in memory. Expanding a course card lazy-loads its details from `GET /api/courses/[code]`.
 
-The app shows only the 2023 Graduation Program, grades 10-12. Course detail text originates from the **BC Course Registry** website (scraped, then loaded into the DB via the write API).
+The app shows only the 2023 Graduation Program, grades 10-12. Course detail text originates from the **BC Course Registry** and is loaded into the DB via the write API.
 
 ## Tech Stack
 
@@ -56,7 +56,6 @@ npm run db:load -- ./payload.json  # POST a JSON payload to /api/courses (gated 
 The DB is the single source of truth — there is no committed JSON data file. To re-sync, produce a JSON payload file (snake_case rows matching the DB columns; see `scripts/load_supabase.ts` for the shape), then POST it through the write API:
 
 ```bash
-python3 scripts/scrape-course-details.py    # generate detail data (transient, resumable)
 npm run db:load -- ./payload.json           # POST the payload to /api/courses
 ```
 
@@ -85,8 +84,7 @@ docs/
 
 scripts/
 ├── load_supabase.ts      # Reads a JSON payload and POSTs it to /api/courses
-├── migrate.sql           # Supabase schema DDL (run once in SQL Editor)
-└── scrape-course-details.py  # Course details scraper
+└── migrate.sql           # Supabase schema DDL (run once in SQL Editor)
 ```
 
 ## Documentation

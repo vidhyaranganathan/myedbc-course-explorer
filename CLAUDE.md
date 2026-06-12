@@ -16,8 +16,7 @@ myedbc-course-explorer/
 │   └── agents/            # code-reviewer subagent
 ├── scripts/
 │   ├── load_supabase.ts          # Reads a JSON payload and POSTs it to /api/courses
-│   ├── migrate.sql               # Supabase schema DDL (run once in SQL Editor)
-│   └── scrape-course-details.py  # Scrapes per-course details from BC Course Registry
+│   └── migrate.sql               # Supabase schema DDL (run once in SQL Editor)
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx     # Root layout (Inter font)
@@ -51,7 +50,6 @@ npm run lint     # Run ESLint
 npm run test     # Run tests (Vitest)
 npm run test:coverage  # Run tests with coverage report
 npm run db:load -- ./payload.json  # POST a JSON payload to /api/courses (gated upsert)
-python3 scripts/scrape-course-details.py  # Scrape course details (resumes automatically)
 ```
 
 ## API Layer
@@ -68,7 +66,7 @@ The browser never queries Supabase directly. The `service_role` key (`SUPABASE_S
 
 The DB is the single source of truth — there is no Excel and no committed JSON data file.
 
-1. Produce a JSON payload file (snake_case rows matching the DB columns; see `scripts/load_supabase.ts` for the shape). `scripts/scrape-course-details.py` can generate detail data, but its output is transient — not committed.
+1. Produce a JSON payload file (snake_case rows matching the DB columns; see `scripts/load_supabase.ts` for the shape).
 2. Run `npm run db:load -- ./payload.json` to POST it to `/api/courses`, which performs the gated upsert.
 3. Schema is created once via `scripts/migrate.sql` in the Supabase SQL Editor.
 

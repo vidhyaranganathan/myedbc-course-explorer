@@ -26,7 +26,6 @@
 | React Testing Library | Component test utilities |
 | tsx | Running TypeScript scripts (Excel conversion, DB seed) |
 | xlsx | Parsing Excel files (devDependency only) |
-| Python 3 | Course details scraper |
 
 ## Deployment
 

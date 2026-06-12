@@ -41,7 +41,7 @@ through the API route handlers (ADR-007).
 Write path (the only way data enters the DB):
 
   payload.json ──▶ npm run db:load ──▶ POST /api/courses ──▶ Supabase
-  (transient,        (load_supabase.ts)   (X-Api-Key ==
+  (assembled,        (load_supabase.ts)   (X-Api-Key ==
    not committed)                          API_WRITE_SECRET)
 ```
 
@@ -89,10 +89,6 @@ DDL for the Supabase tables. Run once in the Supabase SQL Editor to create the s
 ### `scripts/load_supabase.ts` — Data Loader
 
 A thin client: reads a JSON payload file and POSTs it to `/api/courses`. It does not write to Supabase directly. Run via `npm run db:load -- ./payload.json`.
-
-### `scripts/scrape-course-details.py` — Detail Scraper
-
-Scrapes the BC Course Registry for per-course details. Its output is a transient payload loaded into the DB via the write API — not a committed data file. Resumes automatically.
 
 ## Design Principles
 

@@ -5,7 +5,7 @@
  * file and POSTs it to /api/courses, which performs the secret-gated bulk upsert.
  * There is no Excel download and no committed JSON source: the DB is the single
  * source of truth, and re-syncs supply a transient payload file produced by
- * whatever upstream process (e.g. the scraper) generated it.
+ * whatever upstream process generated it.
  *
  * Payload file shape (snake_case rows matching the DB columns):
  *   {

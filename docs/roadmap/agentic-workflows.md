@@ -22,7 +22,7 @@ For product features see [roadmap.md](roadmap.md). For code issues see [tech-deb
 |----|----------|-------------|----------|--------|
 | AW-007 | Code reviewer in CI | Wire code-reviewer subagent into PR workflow via Claude Code headless mode in GitHub Actions | Unassigned | Planned |
 | AW-008 | Automated coverage improvement | Scheduled workflow runs `/gen-test` on untested files, opens PRs to ratchet coverage thresholds | Unassigned | Planned |
-| AW-009 | Data freshness automation | GitHub Actions workflow to automate Excel import + scrape pipeline on schedule or trigger | Unassigned | Planned |
+| AW-009 | Data freshness automation | GitHub Actions workflow to automate payload assembly + `npm run db:load` on schedule or trigger. Note: the old course-details scraper has been removed, so this would need a new way to assemble the detail payload | Unassigned | Planned |
 | AW-016 | Nightly E2E regression suite | Scheduled GitHub Actions workflow running Playwright E2E tests against the live Vercel deployment every night. Reports failures via GitHub issue or Slack notification. Depends on TD-012 | Unassigned | Planned |
 
 ## Ideas
