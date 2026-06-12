@@ -13,11 +13,10 @@
 │  │  │ Static JSON  │  │       Client-Side App       ││  │
 │  │  │ (interim)    │  │                             ││  │
 │  │  │ courses.json │──│  page.tsx (single page)     ││  │
-│  │  │ course-      │  │    ├─ Deduplication logic   ││  │
-│  │  │ details.json │──│    ├─ Filter UI             ││  │
-│  │  │              │  │    ├─ Course list            ││  │
-│  │  └─────────────┘  │    └─ Detail expansion       ││  │
-│  │                    │                             ││  │
+│  │  │ course-      │  │    ├─ Filter UI             ││  │
+│  │  │ details.json │──│    ├─ Course list            ││  │
+│  │  │              │  │    └─ Detail expansion       ││  │
+│  │  └─────────────┘  │                             ││  │
 │  │                    │  search.ts (filter engine)   ││  │
 │  │                    │  types.ts  (Course type)     ││  │
 │  │                    └─────────────────────────────┘│  │
@@ -29,25 +28,27 @@
 ┌─────────────────────────────────────────────────────────┐
 │                  Supabase (Postgres)                    │
 │                                                         │
-│  courses                 (code, grade) PK  5,480 rows   │
-│  course_grad_programs    (code, grade, program)  11,241  │
-│  course_details          code PK           5,480 rows   │
-│  course_grad_requirements                  2,983 rows   │
-│  course_grad_electives                     3,833 rows   │
+│  courses         (code, grade) PK    3,951 rows         │
+│  course_details  code PK             5,569 rows         │
 └─────────────────────────────────────────────────────────┘
 
-Data pipeline (offline / dev only):
-  ┌──────────────────┐    ┌──────────────────────────┐
-  │ BC Ministry Excel│───▶│ scripts/convert-excel.ts │──▶ courses.json
-  └──────────────────┘    └──────────────────────────┘
-  ┌──────────────────┐    ┌──────────────────────────────┐
-  │ BC Course        │───▶│ scripts/scrape-course-       │──▶ course-details.json
-  │ Registry website │    │ details.py                   │
-  └──────────────────┘    └──────────────────────────────┘
-  ┌──────────────────┐    ┌──────────────────────────┐
-  │ courses.json +   │───▶│ scripts/load_supabase.ts │──▶ Supabase tables
-  │ course-details   │    │ (npm run db:load)         │
-  └──────────────────┘    └──────────────────────────┘
+Data pipeline (runs on developer machine):
+
+  ┌──────────────────────────┐
+  │ BC Ministry Excel (live) │───▶ scripts/load_supabase.ts ──▶ courses (Supabase)
+  │ (downloaded at runtime)  │
+  └──────────────────────────┘
+
+  ┌──────────────────────────┐
+  │ BC Ministry Excel (live) │───▶ scripts/scrape-course-details.py
+  │ (code list source)       │         │
+  └──────────────────────────┘         ▼
+                                  course-details.json (committed)
+  ┌──────────────────────────┐         │
+  │ BC Course Registry site  │─────────┘
+  │ (detail data per code)   │
+  └──────────────────────────┘
+                                  scripts/load_supabase.ts ──▶ course_details (Supabase)
 ```
 
 ## Key Components
@@ -56,11 +57,10 @@ Data pipeline (offline / dev only):
 
 The entire UI is a single client component (`"use client"`). It:
 
-1. Imports both JSON data files at build time
-2. Deduplicates courses by `code|grade` key on initial load
-3. Filters to grades 9-12 only
-4. Renders a filter bar + paginated course list
-5. Expands course cards to show scraped details from `course-details.json`
+1. Imports both JSON data files at build time (interim — to be replaced with Supabase queries)
+2. Filters to grades 9-12 only
+3. Renders a filter bar + paginated course list
+4. Expands course cards to show scraped details from `course-details.json`
 
 ### `src/lib/search.ts` — Filter Engine
 
@@ -71,23 +71,29 @@ Generic filtering functions that work with any type extending the `Searchable` i
 
 ### `src/lib/types.ts` — Type Definitions
 
-Defines the `Course` interface matching the raw JSON structure. The `DeduplicatedCourse` type (defined in `page.tsx`) extends this by replacing `gradProgram`/`gradRequirement` with a `gradPrograms` array.
+Defines the `Course` interface matching the raw JSON structure.
 
-### `src/data/` — Static Data (interim)
+### `src/data/` — Static Data (interim fallback)
 
-Two committed JSON files used as the seed source for Supabase and as an interim data layer until the app-phase Supabase integration is complete.
+Two committed JSON files used as the seed source for Supabase and as an interim data layer until the app-phase Supabase integration is complete:
+- `courses.json` — fallback only (live Excel used as primary source)
+- `course-details.json` — scraped data, committed after each scraper run
 
 ### `scripts/migrate.sql` — Database Schema
 
-DDL for all five Supabase tables. Run once in the Supabase SQL Editor to create the schema.
+DDL for the two Supabase tables. Run once in the Supabase SQL Editor to create the schema.
 
 ### `scripts/load_supabase.ts` — Data Loader
 
-Reads `courses.json` + `course-details.json` and upserts all five Supabase tables. Run via `npm run db:load`. Accepts an optional Excel path argument for a full-field load: `npm run db:load -- /path/to/open_courses.xlsx`.
+Downloads the live BC Ministry Excel, filters to 2023 Graduation Program, and upserts `courses`. Also upserts `course_details` from the committed `course-details.json`. Run via `npm run db:load`.
+
+### `scripts/scrape-course-details.py` — Detail Scraper
+
+Downloads the live Excel for the course code list, then scrapes the BC Course Registry for per-course details. Resumes automatically. Run via `python3 scripts/scrape-course-details.py`.
 
 ## Design Principles
 
-1. **Simplicity over sophistication**: Client-side filtering across ~5K courses remains instant
+1. **Simplicity over sophistication**: Client-side filtering across ~4K courses remains instant
 2. **Supabase as the runtime data layer**: Replaces static JSON imports; enables data updates without redeployment (see ADR-006)
-3. **Fast iteration**: One file for the UI, one file for search logic, one file for types
-4. **Offline-first data pipeline**: Data transformation happens on the developer's machine, not at runtime
+3. **Live Excel as source of truth**: Both the loader and scraper pull from the Ministry URL directly — no stale local files
+4. **Fast iteration**: One file for the UI, one file for search logic, one file for types

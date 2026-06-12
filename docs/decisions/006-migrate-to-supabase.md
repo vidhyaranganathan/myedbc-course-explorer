@@ -2,7 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-04-10
-**Updated**: 2026-06-04
+**Updated**: 2026-06-11
 **Supersedes**: ADR-001
 
 ## Context
@@ -32,29 +32,30 @@ Two tables across two source domains:
 
 | Table | Primary Key | Rows | Source |
 |-------|-------------|------|--------|
-| `courses` | `(code, grade)` | 5,480 | Excel `open_courses.xlsx` |
+| `courses` | `(code, grade)` | ~3,951 | BC Ministry Excel (live URL), filtered to 2023 Graduation Program |
 | `course_details` | `code` | 5,480 | `course-details.json` (scraper) |
 
 ### `courses`
 
-One row per unique `(code, grade)` offering. The source Excel has 12,741 raw rows because the same course is repeated once per grad program it belongs to (1995, 2004, 2018, 2023, Adult, Course-Based). These are collapsed into a single row per `(code, grade)` by aggregating all grad program associations into the `grad_info` JSONB column.
+One row per unique `(code, grade)` offering, **filtered to the 2023 Graduation Program only**. The source data has 12,741 raw rows because the same course repeats once per grad program (1995, 2004, 2018, 2023, Adult, Course-Based). Filtering to 2023 gives ~3,880 unique, non-duplicated rows — no deduplication logic needed.
 
-```
-grad_info: [
-  {"program": "2023 Graduation Program", "requirement": "Elective"},
-  {"program": "Adult Graduation Program", "requirement": "Elective"}
-]
-```
+`grad_requirement` is the flat text value from the source for the 2023 program (e.g. `"Elective"`, `"Required"`).
 
-Courses with no grad program association have `grad_info = '[]'`.
+**Grade 9 courses are excluded** — Grade 9 is not part of the 2023 Graduation Program structure. The original source data in `courses.json` retains them if ever needed.
 
-Columns: `code`, `grade`, `title`, `credits`, `category`, `language`, `subject`, `sub_category`, `myedb_code`, `trax_code`, `developer`, `grad_info`
+Columns: `code`, `grade`, `title`, `credits`, `category`, `language`, `subject`, `sub_category`, `myedb_code`, `trax_code`, `developer`, `grad_requirement`
+
+**Columns excluded intentionally:**
+- `authorizer`, `open_date`, `ministry_subject_code` — not needed for current app features.
+- `close_date`, `completion_end_date` — do not exist in the source Excel file.
+
+**Data source:** `load_supabase.ts` downloads the live Excel file from the BC Ministry at runtime. `courses.json` is kept in the repo as a fallback (`npm run db:load -- --json`) but will have `null` for `myedb_code`, `trax_code`, and `developer`.
 
 ### `course_details`
 
 One row per course code (not per grade). Sourced from the scraper. Joins to `courses` on `code`. There is no FK constraint between the tables because `courses` PK is `(code, grade)` while `course_details` is keyed by `code` alone — one detail entry covers all grade variants of a course.
 
-`grad_requirements` and `grad_electives` from the scraper are stored as JSONB arrays:
+`grad_requirements` and `grad_electives` from the scraper are stored as JSONB arrays and reflect data across all grad programs (not just 2023) — preserved for completeness and future graduation planner use (R-004).
 
 ```
 grad_requirements: [
@@ -65,32 +66,13 @@ grad_electives: ["2023 Graduation Program", "Adult Graduation Program"]
 
 Columns: `code`, `generic_course_type`, `program_guide_title`, `published_description`, `grad_requirements`, `grad_electives`
 
-### Why JSONB instead of separate tables for grad data
+### Schema evolution: from 5 tables → JSONB → flat 2023 filter
 
-An earlier iteration of this schema used 5 tables, normalising grad programs into `course_grad_programs`, `course_grad_requirements`, and `course_grad_electives`. That was rejected because:
+**5-table normalised schema (rejected):** Split grad programs into `course_grad_programs`, `course_grad_requirements`, and `course_grad_electives`. Rejected because it solved for a graduation planner query pattern that hasn't been designed yet, introduced FK complexity, and added joins the current app doesn't need.
 
-#### Data loss risk of a simpler filter approach
+**JSONB `grad_info` column (superseded):** A `grad_info jsonb` array aggregated all grad program associations per row, preserving all 5,480 courses. Superseded after code review: the JSONB complexity was not needed given the app only needs 2023 program data.
 
-Before settling on JSONB, a "filter to 2023 program only" approach was considered — since current students are all on the 2023 Graduation Program and that filter produces zero duplicate rows. However, filtering to 2023 alone would silently drop **1,600 course codes** from the database:
-
-- **1,500 courses** have no grad program association at all (French-language Board Authority courses, K-8 courses grades 6–9, Ministry courses without a program assignment)
-- **100 courses** exist only in older programs (1995, Adult Graduation, Course-Based) and never appear in the 2023 set
-
-The JSONB approach keeps all 5,480 unique `(code, grade)` rows — none dropped — while still making it trivial to query 2023-only courses:
-```sql
-WHERE grad_info @> '[{"program": "2023 Graduation Program"}]'
-```
-
-#### Why not 5 normalised tables
-
-- It solved for a graduation planner query pattern that hasn't been designed yet
-- It introduced FK complexity (course_details FK'd to a (code, grade) PK didn't work cleanly)
-- It split logically related data across joins that the current app doesn't need
-- JSONB in Postgres is fully queryable: containment (`@>`), `jsonb_array_elements()`, and GIN indexes give equivalent query power without the schema complexity
-
-When the graduation planner is designed (R-004), real query patterns will inform whether denormalisation is needed. Until then JSONB keeps the schema flat and all data intact.
-
-**Extra Excel columns** (`myedb_code`, `trax_code`, `developer`) are present in the schema but are `null` when loading from `courses.json` fallback. Pass the Excel file directly to get full data: `npm run db:load -- /path/to/open_courses.xlsx`.
+**Current approach — 2023 filter + flat `grad_requirement` (accepted):** Filtering to the 2023 Graduation Program makes the schema simpler and directly relevant to current students. The `grad_requirement` column is plain text — no JSONB complexity on `courses`. The ~1,600 courses not in the 2023 program (older programs, Grade 9, no-program courses) are intentionally excluded from the DB; `courses.json` retains them if ever needed.
 
 ## Environment Variables
 
@@ -115,15 +97,18 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=   # anon key, safe to expose
 - Enables all medium/long-term roadmap features (R-004, R-007, R-010)
 - Reduces initial page load size (query only visible rows instead of full dataset)
 - Supabase Hobby tier is free and compatible with Vercel Hobby
-- No data is dropped — all 5,480 unique (code, grade) courses are preserved including those not in the 2023 program
+- Flat schema with plain text columns — no JSONB complexity on `courses`
+- Scoped to current students (2023 program) — directly relevant data only
 
 **Negative:**
 - Adds infrastructure dependency — the app now requires a live Supabase project
 - Requires secret management (`.env.local` locally, Vercel env vars in CI/CD)
 - Slightly more complex local setup for new contributors
 - Supabase free tier has row limits (500 MB storage, 50K MAU) — sufficient for now
+- ~1,600 courses (Grade 9, older programs, no-program) not in the DB — by design, source JSON retained
 
 **When to revisit:**
 - If Supabase free-tier limits are hit (consider Supabase Pro or self-hosted Postgres)
 - If query latency becomes a UX issue (consider edge caching or ISR)
-- If the graduation planner (R-004) requires relational queries across grad programs — at that point evaluate whether to denormalise `grad_info` into a separate table
+- If the graduation planner (R-004) requires data from other grad programs — revisit schema scope
+- If `myedb_code`/`trax_code`/`developer` are needed — load from Excel directly

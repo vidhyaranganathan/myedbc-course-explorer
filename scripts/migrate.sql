@@ -2,41 +2,54 @@
 -- Run this in the Supabase SQL Editor to create all tables from scratch.
 -- Safe to re-run: uses CREATE TABLE IF NOT EXISTS and CREATE INDEX IF NOT EXISTS.
 --
+-- To reset: DROP TABLE IF EXISTS course_details, courses CASCADE; then re-run.
+--
 -- Schema: 2 tables
---   courses        — one row per (code, grade). All grad program data stored in
---                    grad_info jsonb column to avoid row duplication.
+--   courses        — one row per (code, grade), filtered to 2023 Graduation Program only.
+--                    Source: BC Ministry Excel (live URL, see load_supabase.ts).
+--                    Grades 10, 11, 12 only — Grade 9 is not part of the 2023 program.
 --   course_details — one row per course code. Scraped data from BC Course Registry.
 --                    Joins to courses on code.
 
 -- ── Table 1: courses ──────────────────────────────────────────────────────────
--- Source: Excel open_courses.xlsx (12,741 raw rows collapsed to 5,480 unique
--- (code, grade) pairs by aggregating grad programs into the grad_info array).
+-- Source: open_courses.xlsx from BC Ministry of Education (downloaded at load time)
+-- Filtered to Grad Program = "2023 Graduation Program" → 3,951 unique (code, grade) rows.
+-- Each course appears exactly once at this filter — no deduplication needed.
 --
--- grad_info format:
---   [{"program": "2023 Graduation Program", "requirement": "Elective"}, ...]
--- A course with no grad program association has grad_info = '[]'.
+-- grad_requirement: "Grad Program Requirement" value for the 2023 program
+--   (e.g. "Elective", "Required").
+-- myedb_code: MyEd BC Code — cross-reference for parents checking student timetables.
+-- trax_code:  TRAX Code — used by TRAX reporting system.
+-- developer:  Organisation that developed the course (e.g. IB, SkilledTradesBC, Ministry).
+--
+-- Columns excluded intentionally:
+--   authorizer, open_date, ministry_subject_code — not needed for current app features.
+--   close_date, completion_end_date — do not exist in the source Excel file.
 
 CREATE TABLE IF NOT EXISTS courses (
-  code         text    NOT NULL,
-  grade        text    NOT NULL,
-  title        text    NOT NULL,
-  credits      text,
-  category     text    NOT NULL,
-  language     text    NOT NULL DEFAULT 'English',
-  subject      text,
-  sub_category text,
-  myedb_code   text,
-  trax_code    text,
-  developer    text,
-  grad_info    jsonb   NOT NULL DEFAULT '[]',
+  code             text NOT NULL,
+  grade            text NOT NULL,
+  title            text NOT NULL,
+  credits          text,
+  category         text NOT NULL,
+  language         text NOT NULL DEFAULT 'English',
+  subject          text,
+  sub_category     text,
+  myedb_code       text,
+  trax_code        text,
+  developer        text,
+  grad_requirement text,
   PRIMARY KEY (code, grade)
 );
 
 -- ── Table 2: course_details ───────────────────────────────────────────────────
--- Source: scrape-course-details.py / course-details.json
+-- Source: course-details.json (scraper output from BC Course Registry)
 -- One row per course code (not per grade). Joins to courses on code.
--- No FK to courses because course_details is keyed by code alone while
--- courses PK is (code, grade) — a single code may span multiple grades.
+-- No FK to courses: course_details is keyed by code alone while courses PK
+-- is (code, grade).
+--
+-- grad_requirements and grad_electives are stored as JSONB arrays from the scraper.
+-- These reflect data across all grad programs — preserved for future use (e.g. R-004).
 --
 -- grad_requirements format:
 --   [{"program": "Program End Date", "requirement": "2018 Graduation Program",
@@ -56,13 +69,9 @@ CREATE TABLE IF NOT EXISTS course_details (
 
 -- ── Indexes ───────────────────────────────────────────────────────────────────
 
--- Standard B-tree indexes for common filter columns
-CREATE INDEX IF NOT EXISTS idx_courses_grade      ON courses (grade);
-CREATE INDEX IF NOT EXISTS idx_courses_category   ON courses (category);
-CREATE INDEX IF NOT EXISTS idx_courses_subject    ON courses (subject);
-CREATE INDEX IF NOT EXISTS idx_courses_language   ON courses (language);
-CREATE INDEX IF NOT EXISTS idx_courses_developer  ON courses (developer);
-
--- GIN index for JSONB containment queries on grad_info, e.g.:
---   WHERE grad_info @> '[{"program": "2023 Graduation Program"}]'
-CREATE INDEX IF NOT EXISTS idx_courses_grad_info  ON courses USING GIN (grad_info);
+CREATE INDEX IF NOT EXISTS idx_courses_grade        ON courses (grade);
+CREATE INDEX IF NOT EXISTS idx_courses_category     ON courses (category);
+CREATE INDEX IF NOT EXISTS idx_courses_subject      ON courses (subject);
+CREATE INDEX IF NOT EXISTS idx_courses_language     ON courses (language);
+CREATE INDEX IF NOT EXISTS idx_courses_developer    ON courses (developer);
+CREATE INDEX IF NOT EXISTS idx_courses_grad_req     ON courses (grad_requirement);

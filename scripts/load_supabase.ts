@@ -1,33 +1,35 @@
 /**
  * Load course data into Supabase.
  *
+ * Primary source: BC Ministry of Education open courses Excel file (downloaded at runtime).
+ * Fallback:       src/data/courses.json (myedb_code, trax_code, developer will be null).
+ *
  * Usage:
- *   npm run db:load                               # uses courses.json fallback
- *   npm run db:load -- /path/to/open_courses.xlsx # full data from Excel
- *
- * Reads (Excel mode):
- *   <excel path>               all columns including trax_code, myedb_code, developer, etc.
- *   src/data/course-details.json
- *
- * Reads (fallback mode — no Excel):
- *   src/data/courses.json      (myedb_code, trax_code, developer will be null)
- *   src/data/course-details.json
+ *   npm run db:load                               # downloads live Excel from Ministry
+ *   npm run db:load -- /path/to/open_courses.xlsx # use a local Excel file
+ *   npm run db:load -- --json                     # force fallback to courses.json
  *
  * Populates:
- *   courses        — one row per (code, grade), grad_info jsonb aggregates all
- *                    grad program associations for that course
- *   course_details — one row per code (scraped data), grad_requirements and
- *                    grad_electives stored as jsonb arrays
+ *   courses        — filtered to 2023 Graduation Program only (~3,951 rows).
+ *                    One row per (code, grade). grad_requirement is flat text.
+ *   course_details — one row per code (scraped data). grad_requirements and
+ *                    grad_electives stored as jsonb arrays.
  */
 
 import * as fs from "fs";
 import * as path from "path";
+import * as https from "https";
 import * as dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 
 dotenv.config({ path: ".env.local" });
 
 // ── Config ────────────────────────────────────────────────────────────────────
+
+const EXCEL_URL =
+  "https://www.bced.gov.bc.ca/datacollections/course_registry_web_search/data/open_courses.xlsx";
+const GRAD_PROGRAM_2023 = "2023 Graduation Program";
+const BATCH_SIZE = 200;
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY;
@@ -42,14 +44,8 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-const BATCH_SIZE = 200;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-interface GradInfoEntry {
-  program: string;
-  requirement: string | null;
-}
 
 interface CourseRow {
   code: string;
@@ -63,7 +59,7 @@ interface CourseRow {
   myedb_code: string | null;
   trax_code: string | null;
   developer: string | null;
-  grad_info: GradInfoEntry[];
+  grad_requirement: string | null;
 }
 
 interface CourseDetailRow {
@@ -102,9 +98,24 @@ function decodeHtml(str: string): string {
     .replace(/&[a-zA-Z]+;/g, "");
 }
 
-// ── Load source data ──────────────────────────────────────────────────────────
+function downloadFile(url: string, dest: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(dest);
+    https.get(url, (res) => {
+      if (res.statusCode !== 200) {
+        reject(new Error(`HTTP ${res.statusCode} downloading ${url}`));
+        return;
+      }
+      res.pipe(file);
+      file.on("finish", () => file.close(() => resolve()));
+    }).on("error", (err) => {
+      fs.unlink(dest, () => {});
+      reject(err);
+    });
+  });
+}
 
-const excelArg = process.argv[2];
+// ── Load source data ──────────────────────────────────────────────────────────
 
 interface RawRow {
   code: string;
@@ -122,16 +133,41 @@ interface RawRow {
   developer: string | null;
 }
 
-let rawRows: RawRow[];
+async function loadRawRows(): Promise<RawRow[]> {
+  const arg = process.argv[2];
 
-if (excelArg && fs.existsSync(excelArg)) {
-  console.log(`Reading Excel: ${excelArg}`);
+  // Force JSON fallback
+  if (arg === "--json") {
+    console.log("Using courses.json fallback (myedb_code, trax_code, developer will be null)");
+    return loadFromJson();
+  }
+
+  // Local Excel file passed as argument
+  if (arg && fs.existsSync(arg)) {
+    console.log(`Reading local Excel: ${arg}`);
+    return loadFromExcel(arg);
+  }
+
+  // Download live Excel from Ministry
+  const tmpPath = "/tmp/open_courses_bc.xlsx";
+  console.log(`Downloading Excel from Ministry: ${EXCEL_URL}`);
+  try {
+    await downloadFile(EXCEL_URL, tmpPath);
+    console.log("Download complete.");
+    return loadFromExcel(tmpPath);
+  } catch (err) {
+    console.warn(`Download failed (${(err as Error).message}), falling back to courses.json`);
+    return loadFromJson();
+  }
+}
+
+function loadFromExcel(filePath: string): RawRow[] {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const XLSX = require("xlsx");
-  const workbook = XLSX.readFile(excelArg);
+  const workbook = XLSX.readFile(filePath);
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(sheet) as Record<string, unknown>[];
-  rawRows = rows.map((r) => ({
+  return rows.map((r) => ({
     code:            String(r["Course Code"] ?? "").trim(),
     grade:           String(r["Grade"] ?? "").trim(),
     title:           String(r["Course Title"] ?? "").trim(),
@@ -146,10 +182,9 @@ if (excelArg && fs.existsSync(excelArg)) {
     traxCode:        clean(r["TRAX Code"]),
     developer:       clean(r["Developer"]),
   })).filter((r) => r.code && r.grade && r.title && r.category);
-} else {
-  if (excelArg) console.warn(`Excel file not found at ${excelArg}, falling back to courses.json`);
-  else console.log("No Excel path provided — using courses.json (myedb_code, trax_code, developer will be null)");
+}
 
+function loadFromJson(): RawRow[] {
   const jsonRows = JSON.parse(
     fs.readFileSync(path.join("src", "data", "courses.json"), "utf-8")
   ) as Array<{
@@ -157,8 +192,7 @@ if (excelArg && fs.existsSync(excelArg)) {
     category: string; language: string; subject: string | null;
     subCategory: string | null; gradProgram: string | null; gradRequirement: string | null;
   }>;
-
-  rawRows = jsonRows.map((r) => ({
+  return jsonRows.map((r) => ({
     code:            String(r.code).trim(),
     grade:           r.grade.trim(),
     title:           r.title.trim(),
@@ -174,69 +208,6 @@ if (excelArg && fs.existsSync(excelArg)) {
     developer:       null,
   }));
 }
-
-interface CourseDetailSource {
-  genericCourseType?: string;
-  programGuideTitle?: string;
-  publishedDescription?: string;
-  gradElectives?: string[];
-  gradRequirements?: { program: string; requirement: string; examinable: string }[];
-}
-
-const detailsMap: Record<string, CourseDetailSource> = JSON.parse(
-  fs.readFileSync(path.join("src", "data", "course-details.json"), "utf-8")
-);
-
-// ── Transform ─────────────────────────────────────────────────────────────────
-//
-// courses: group by (code, grade), accumulate grad programs into grad_info array.
-// course_details: one row per code, arrays kept as-is from the scraper.
-
-const courseMap = new Map<string, CourseRow>();
-
-for (const row of rawRows) {
-  const key = `${row.code}|${row.grade}`;
-
-  if (!courseMap.has(key)) {
-    courseMap.set(key, {
-      code:         row.code,
-      grade:        row.grade,
-      title:        row.title,
-      credits:      row.credits,
-      category:     row.category,
-      language:     row.language,
-      subject:      row.subject,
-      sub_category: row.subCategory,
-      myedb_code:   row.myedbCode,
-      trax_code:    row.traxCode,
-      developer:    row.developer,
-      grad_info:    [],
-    });
-  }
-
-  if (row.gradProgram !== null) {
-    const course = courseMap.get(key)!;
-    // Avoid duplicates within the same (code, grade, program) combination
-    const already = course.grad_info.some((g) => g.program === row.gradProgram);
-    if (!already) {
-      course.grad_info.push({
-        program:     row.gradProgram,
-        requirement: row.gradRequirement ?? null,
-      });
-    }
-  }
-}
-
-const courses = Array.from(courseMap.values());
-
-const courseDetails: CourseDetailRow[] = Object.entries(detailsMap).map(([code, detail]) => ({
-  code,
-  generic_course_type:   detail.genericCourseType ?? null,
-  program_guide_title:   detail.programGuideTitle ? decodeHtml(detail.programGuideTitle) : null,
-  published_description: detail.publishedDescription ?? null,
-  grad_requirements:     detail.gradRequirements ?? [],
-  grad_electives:        detail.gradElectives ?? [],
-}));
 
 // ── Batch upsert ──────────────────────────────────────────────────────────────
 
@@ -265,11 +236,56 @@ async function upsertBatches<T extends object>(
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log(`\nSource data:`);
-  console.log(`  Raw rows:            ${rawRows.length}`);
-  console.log(`  course-details.json: ${Object.keys(detailsMap).length} entries`);
-  console.log(`\nTransformed:`);
-  console.log(`  courses:        ${courses.length} (unique code+grade pairs)`);
+  const rawRows = await loadRawRows();
+
+  // Filter to 2023 Graduation Program — each (code, grade) is unique at this filter
+  const seen = new Set<string>();
+  const courses: CourseRow[] = [];
+
+  for (const row of rawRows) {
+    if (row.gradProgram !== GRAD_PROGRAM_2023) continue;
+    const key = `${row.code}|${row.grade}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    courses.push({
+      code:             row.code,
+      grade:            row.grade,
+      title:            row.title,
+      credits:          row.credits,
+      category:         row.category,
+      language:         row.language,
+      subject:          row.subject,
+      sub_category:     row.subCategory,
+      myedb_code:       row.myedbCode,
+      trax_code:        row.traxCode,
+      developer:        row.developer,
+      grad_requirement: row.gradRequirement,
+    });
+  }
+
+  interface CourseDetailSource {
+    genericCourseType?: string;
+    programGuideTitle?: string;
+    publishedDescription?: string;
+    gradElectives?: string[];
+    gradRequirements?: { program: string; requirement: string; examinable: string }[];
+  }
+
+  const detailsMap: Record<string, CourseDetailSource> = JSON.parse(
+    fs.readFileSync(path.join("src", "data", "course-details.json"), "utf-8")
+  );
+
+  const courseDetails: CourseDetailRow[] = Object.entries(detailsMap).map(([code, detail]) => ({
+    code,
+    generic_course_type:   detail.genericCourseType ?? null,
+    program_guide_title:   detail.programGuideTitle ? decodeHtml(detail.programGuideTitle) : null,
+    published_description: detail.publishedDescription ?? null,
+    grad_requirements:     detail.gradRequirements ?? [],
+    grad_electives:        detail.gradElectives ?? [],
+  }));
+
+  console.log(`\nTransformed (${GRAD_PROGRAM_2023} only):`);
+  console.log(`  courses:        ${courses.length}`);
   console.log(`  course_details: ${courseDetails.length}`);
   console.log(`\nLoading...`);
 
