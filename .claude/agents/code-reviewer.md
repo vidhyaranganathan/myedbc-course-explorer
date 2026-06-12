@@ -11,14 +11,14 @@ You are a code reviewer for the BC Course Finder project. Review the provided ch
 
 ### Architecture Alignment
 - Check changes against ADRs in `docs/decisions/`
-- Ensure no database or backend API is introduced (ADR-001)
-- Ensure search logic stays client-side in `src/lib/search.ts` (ADR-002)
-- Flag if generated data files (`src/data/*.json`) are being edited directly
+- Supabase is the single source of truth, reached only through `src/app/api/courses/` route handlers; the browser must never query Supabase directly (ADR-007)
+- Ensure search/filtering stays client-side and in-memory in `src/lib/search.ts`, run over the list fetched from `GET /api/courses` (ADR-002)
+- Flag any write to Supabase outside the secret-gated `POST /api/courses`, and any reintroduction of committed data files under `src/data/`
 
 ### Code Conventions
 - Tailwind CSS for all styling — no inline styles or CSS modules
 - Generic filter functions in `search.ts` must work with any type extending `Searchable`
-- `DeduplicatedCourse` type pattern: extend `Course`, replace singular fields with arrays
+- DB snake_case rows map to API camelCase shapes via `src/lib/courses-mapper.ts`; keep that mapping the single place column names are translated
 - TypeScript strict mode and lint rules are enforced by the PostToolUse hook
 
 ### Common Issues
@@ -28,9 +28,10 @@ You are a code reviewer for the BC Course Finder project. Review the provided ch
 - Check that `getFilterOptions()` extracts values for new dropdowns
 
 ### Data Integrity
-- `src/data/courses.json` and `src/data/course-details.json` should only change via the import/scrape pipeline
-- Deduplication logic uses `code|grade` as the key — changes to this are high-risk
-- Grade filtering uses the `HIGH_SCHOOL_GRADES` set — verify grades are zero-padded strings ("09", "10", "11", "12")
+- All DB access goes through `src/app/api/courses/` route handlers — the browser never queries Supabase directly, and the `service_role` key (`SUPABASE_SECRET_KEY`) stays server-side in `src/lib/supabase-server.ts` (ADR-007)
+- Writes happen only via the secret-gated `POST /api/courses` (`X-Api-Key` === `API_WRITE_SECRET`); flag any code that writes to Supabase outside this path
+- The DB stores one row per course (no runtime deduplication) and is scoped to the 2023 Graduation Program, grades 10-12 (ADR-008) — flag reintroduced dedup or client-side grade filtering
+- `code` is treated as unique by the read paths/UI; the schema PK is `(code, grade)` — changes that could introduce a code at multiple grades are high-risk (see TD-016)
 
 ## Output Format
 
