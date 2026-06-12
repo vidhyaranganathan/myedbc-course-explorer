@@ -58,6 +58,22 @@ PR opened
 | `/gen-test` | Generates tests for a file | Use when adding new code. Follows project test patterns |
 | `/docs-audit` | Audits docs against codebase | Use periodically. Also runs weekly via GitHub Actions |
 
+## Branch Naming Convention
+
+Branches must be named by **feature**, not by person. Format: `<type>/<short-description>`
+
+| Type | Use for |
+|------|---------|
+| `feat/` | New features |
+| `fix/` | Bug fixes |
+| `chore/` | Tooling, config, deps |
+| `refactor/` | Code restructuring |
+| `docs/` | Documentation only |
+
+Examples: `feat/multi-select-filters`, `fix/pagination-scroll`, `refactor/extract-components`
+
+Do **not** name branches after yourself (e.g. `Anitha`, `PriyaK`).
+
 ## Development Workflow
 
 1. **Create a branch** from `main`
