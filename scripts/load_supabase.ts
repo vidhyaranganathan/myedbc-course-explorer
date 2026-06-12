@@ -9,13 +9,12 @@
  *
  * Payload file shape (snake_case rows matching the DB columns):
  *   {
- *     "courses":       [ { code, grade, title, credits, category, language,
- *                          subject, sub_category, myedb_code, trax_code,
- *                          developer, grad_requirement }, ... ],
- *     "courseDetails": [ { code, generic_course_type, program_guide_title,
- *                          published_description, grad_requirements,
- *                          grad_electives }, ... ]
+ *     "courses": [ { code, grade, title, credits, category, language,
+ *                    subject, sub_category, myedb_code, trax_code,
+ *                    developer, grad_requirement }, ... ]
  *   }
+ *
+ * (course_details is not written via the API — see ADR-009.)
  *
  * Usage:
  *   npm run db:load -- ./payload.json
@@ -52,8 +51,7 @@ async function main() {
 
   const payload = JSON.parse(fs.readFileSync(payloadPath, "utf-8"));
   const courseCount = Array.isArray(payload.courses) ? payload.courses.length : 0;
-  const detailCount = Array.isArray(payload.courseDetails) ? payload.courseDetails.length : 0;
-  console.log(`Posting ${courseCount} courses + ${detailCount} course_details to ${API_BASE_URL}/api/courses ...`);
+  console.log(`Posting ${courseCount} courses to ${API_BASE_URL}/api/courses ...`);
 
   const res = await fetch(`${API_BASE_URL}/api/courses`, {
     method: "POST",

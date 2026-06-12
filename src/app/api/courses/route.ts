@@ -76,9 +76,10 @@ export async function GET() {
 }
 
 /**
- * POST /api/courses — bulk upsert, secret-gated (ADR-007).
- * Body: { courses?: CourseUpsertRow[], courseDetails?: CourseDetailUpsertRow[] }
+ * POST /api/courses — bulk upsert of courses, secret-gated (ADR-007).
+ * Body: { courses: CourseUpsertRow[] }
  * Header: X-Api-Key must equal API_WRITE_SECRET.
+ * (course_details is not written here — see ADR-009.)
  */
 export async function POST(request: NextRequest) {
   if (!secretMatches(request.headers.get("x-api-key"), process.env.API_WRITE_SECRET)) {
@@ -93,10 +94,9 @@ export async function POST(request: NextRequest) {
   }
 
   const courses = Array.isArray(body?.courses) ? body.courses : [];
-  const courseDetails = Array.isArray(body?.courseDetails) ? body.courseDetails : [];
-  if (courses.length === 0 && courseDetails.length === 0) {
+  if (courses.length === 0) {
     return NextResponse.json(
-      { error: "body must include a non-empty `courses` and/or `courseDetails` array" },
+      { error: "body must include a non-empty `courses` array" },
       { status: 400 }
     );
   }
@@ -104,10 +104,7 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = createServerClient();
     const upsertedCourses = await upsertBatches(supabase, "courses", courses, "code,grade");
-    const upsertedDetails = await upsertBatches(supabase, "course_details", courseDetails, "code");
-    return NextResponse.json({
-      upserted: { courses: upsertedCourses, courseDetails: upsertedDetails },
-    });
+    return NextResponse.json({ upserted: { courses: upsertedCourses } });
   } catch (err) {
     return serverError("POST upsert", err);
   }

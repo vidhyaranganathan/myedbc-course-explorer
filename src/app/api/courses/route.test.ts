@@ -151,33 +151,30 @@ describe("POST /api/courses", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns 400 when neither array is present", async () => {
+  it("returns 400 when no courses array is present", async () => {
     const res = await POST(postReq(JSON.stringify({ foo: 1 }), { "x-api-key": SECRET }));
     expect(res.status).toBe(400);
   });
 
-  it("returns 400 when both arrays are empty (no silent no-op)", async () => {
-    const res = await POST(postReq(JSON.stringify({ courses: [], courseDetails: [] }), { "x-api-key": SECRET }));
+  it("returns 400 when the courses array is empty (no silent no-op)", async () => {
+    const res = await POST(postReq(JSON.stringify({ courses: [] }), { "x-api-key": SECRET }));
     expect(res.status).toBe(400);
   });
 
-  it("upserts courses and details with the right onConflict keys and returns counts", async () => {
+  it("upserts courses with the right onConflict key and returns the count", async () => {
     const calls: UpsertCall[] = [];
-    setClient({ courses: { error: null }, course_details: { error: null } }, calls);
+    setClient({ courses: { error: null } }, calls);
     const res = await POST(
-      postReq(
-        JSON.stringify({
-          courses: [{ code: "MA10", grade: "10" }],
-          courseDetails: [{ code: "MA10" }, { code: "EN10" }],
-        }),
-        { "x-api-key": SECRET }
-      )
+      postReq(JSON.stringify({ courses: [{ code: "MA10", grade: "10" }] }), { "x-api-key": SECRET })
     );
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ upserted: { courses: 1, courseDetails: 2 } });
-    // assert the handler actually sent the rows with correct conflict targets
-    expect(calls).toContainEqual({ table: "courses", rows: [{ code: "MA10", grade: "10" }], options: { onConflict: "code,grade", count: "exact" } });
-    expect(calls).toContainEqual({ table: "course_details", rows: [{ code: "MA10" }, { code: "EN10" }], options: { onConflict: "code", count: "exact" } });
+    expect(await res.json()).toEqual({ upserted: { courses: 1 } });
+    // assert the handler actually sent the rows with the correct conflict target
+    expect(calls).toContainEqual({
+      table: "courses",
+      rows: [{ code: "MA10", grade: "10" }],
+      options: { onConflict: "code,grade", count: "exact" },
+    });
   });
 
   it("batches large course arrays into BATCH_SIZE chunks", async () => {

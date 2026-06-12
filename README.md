@@ -24,9 +24,9 @@ Set `SUPABASE_URL`, `SUPABASE_SECRET_KEY` (service_role, server-only), and `API_
 
 ## How It Works
 
-A Supabase Postgres database is the single source of truth. The browser never queries Supabase directly — all data goes through Next.js Route Handlers under `src/app/api/courses/`. On load, the app fetches `GET /api/courses` (~3,951 courses) once into the browser, then search and filtering happen in memory. Expanding a course card lazy-loads its details from `GET /api/courses/[code]`.
+A Supabase Postgres database is the single source of truth. The browser never queries Supabase directly — all data goes through Next.js Route Handlers under `src/app/api/courses/`. On load, the app fetches `GET /api/courses` (~3,951 courses) once into the browser, then search and filtering happen in memory. Expanding a course card shows its `courses`-table fields with no second request.
 
-The app shows only the 2023 Graduation Program, grades 10-12. Course detail text originates from the **BC Course Registry** and is loaded into the DB via the write API.
+The app shows only the 2023 Graduation Program, grades 10-12.
 
 ## Tech Stack
 
@@ -69,7 +69,7 @@ src/
 │   ├── page.tsx          # Single-page app (search, filters, course list)
 │   ├── layout.tsx        # Root layout
 │   ├── globals.css       # Tailwind + animations
-│   └── api/courses/      # DB gateway: GET (list), GET [code] (one+details), POST (gated upsert)
+│   └── api/courses/      # DB gateway: GET (list), POST (gated upsert)
 ├── lib/
 │   ├── search.ts         # In-memory filtering engine
 │   ├── supabase-server.ts  # Server-only Supabase client (service_role key)

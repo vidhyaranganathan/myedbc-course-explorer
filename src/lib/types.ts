@@ -1,6 +1,7 @@
 // Course data types.
 //
-// The app reads exclusively from the Supabase DB via the API layer (ADR-007).
+// The app reads exclusively from the Supabase DB via the API layer (ADR-007) and
+// uses only the `courses` table — `course_details` is not surfaced (ADR-009).
 // These are the camelCase, API-facing shapes. The DB stores snake_case columns;
 // see src/lib/courses-mapper.ts for the mapping.
 
@@ -20,21 +21,6 @@ export interface CourseListItem {
 /** Backwards-compatible alias. A course is one DB row. */
 export type Course = CourseListItem;
 
-/** Detail for a course, from the `course_details` table (camelCase). */
-export interface CourseDetail {
-  genericCourseType: string | null;
-  programGuideTitle: string | null;
-  publishedDescription: string | null;
-  gradRequirements: { program: string; requirement: string; examinable: string }[];
-  gradElectives: string[];
-}
-
-/** Response shape for GET /api/courses/[code]. */
-export interface CourseDetailResponse {
-  course: CourseListItem;
-  details: CourseDetail | null;
-}
-
 /** Request body for POST /api/courses (snake_case rows matching the DB). */
 export interface CourseUpsertRow {
   code: string;
@@ -51,16 +37,6 @@ export interface CourseUpsertRow {
   grad_requirement: string | null;
 }
 
-export interface CourseDetailUpsertRow {
-  code: string;
-  generic_course_type: string | null;
-  program_guide_title: string | null;
-  published_description: string | null;
-  grad_requirements: { program: string; requirement: string; examinable: string }[];
-  grad_electives: string[];
-}
-
 export interface CourseUpsertBody {
   courses?: CourseUpsertRow[];
-  courseDetails?: CourseDetailUpsertRow[];
 }

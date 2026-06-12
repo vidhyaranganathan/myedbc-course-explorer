@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toCourseListItem, toCourseDetail } from "./courses-mapper";
+import { toCourseListItem } from "./courses-mapper";
 
 describe("toCourseListItem", () => {
   it("maps snake_case DB columns to camelCase", () => {
@@ -44,37 +44,5 @@ describe("toCourseListItem", () => {
     expect(result.subject).toBeNull();
     expect(result.subCategory).toBeNull();
     expect(result.gradRequirement).toBeNull();
-  });
-});
-
-describe("toCourseDetail", () => {
-  it("maps detail columns and passes through JSONB arrays", () => {
-    const row = {
-      generic_course_type: "Ministry-Developed",
-      program_guide_title: "Mathematics",
-      published_description: "Intro to math.",
-      grad_requirements: [{ program: "2023 Graduation Program", requirement: "Required", examinable: "" }],
-      grad_electives: ["Sciences"],
-    };
-    expect(toCourseDetail(row)).toEqual({
-      genericCourseType: "Ministry-Developed",
-      programGuideTitle: "Mathematics",
-      publishedDescription: "Intro to math.",
-      gradRequirements: [{ program: "2023 Graduation Program", requirement: "Required", examinable: "" }],
-      gradElectives: ["Sciences"],
-    });
-  });
-
-  it("defaults null JSONB arrays to empty arrays", () => {
-    const row = {
-      generic_course_type: null,
-      program_guide_title: null,
-      published_description: null,
-      grad_requirements: null,
-      grad_electives: null,
-    };
-    const result = toCourseDetail(row);
-    expect(result.gradRequirements).toEqual([]);
-    expect(result.gradElectives).toEqual([]);
   });
 });

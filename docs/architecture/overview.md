@@ -14,10 +14,9 @@
 │  │  │   (browser)           │    │   src/app/api/courses │  │ │
 │  │  │                       │    │                       │  │ │
 │  │  │  page.tsx             │───▶│  GET  /api/courses    │  │ │
-│  │  │   ├─ Filter UI        │    │  GET  /api/courses/   │  │ │
-│  │  │   ├─ Course list      │◀───│        [code]         │  │ │
-│  │  │   └─ Detail expansion │    │  POST /api/courses    │  │ │
-│  │  │                       │    │        (gated)        │  │ │
+│  │  │   ├─ Filter UI        │◀───│  POST /api/courses    │  │ │
+│  │  │   ├─ Course list      │    │        (gated)        │  │ │
+│  │  │   └─ Detail expansion │    │                       │  │ │
 │  │  │  search.ts (in-memory │    │                       │  │ │
 │  │  │   filter engine)      │    │  supabase-server.ts   │  │ │
 │  │  │  types.ts             │    │  courses-mapper.ts    │  │ │
@@ -31,7 +30,7 @@
 │                     SINGLE SOURCE OF TRUTH                      │
 │                                                                │
 │  courses         (code, grade) PK   ~3,951 rows                │
-│  course_details  code PK                                       │
+│  course_details  code PK   (retained, unused by app — ADR-009) │
 │  RLS enabled — no anon access                                  │
 └────────────────────────────────────────────────────────────────┘
 
@@ -53,15 +52,14 @@ The entire UI is a single client component (`"use client"`). It:
 
 1. Fetches the course list from `GET /api/courses`
 2. Renders a filter bar + paginated course list (2023 Graduation Program, grades 10-12)
-3. Lazy-loads per-course details from `GET /api/courses/[code]` when a card expands
+3. Expands a course card to show its `courses`-table fields — no second request (ADR-009)
 
 ### `src/app/api/courses/` — The Data Gateway
 
 The only path between the app and Supabase (ADR-007):
 
-- `GET /api/courses` — returns all courses (no details); feeds the grid + in-memory filtering
-- `GET /api/courses/[code]` — returns one course plus its details
-- `POST /api/courses` — secret-gated bulk upsert; the `X-Api-Key` header must equal env `API_WRITE_SECRET`. This is the only write path.
+- `GET /api/courses` — returns all courses; feeds the grid + in-memory filtering
+- `POST /api/courses` — secret-gated bulk upsert of courses; the `X-Api-Key` header must equal env `API_WRITE_SECRET`. This is the only write path.
 
 ### `src/lib/supabase-server.ts` — Server-Only DB Client
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
-import type { CourseListItem, CourseDetail, CourseDetailResponse } from "@/lib/types";
+import { useState, useMemo, useEffect } from "react";
+import type { CourseListItem } from "@/lib/types";
 import { filterCourses, getFilterOptions, emptyFilters, type Filters } from "@/lib/search";
 
 const PAGE_SIZE = 50;
@@ -44,23 +44,6 @@ export default function Home() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showGlossary, setShowGlossary] = useState(true);
 
-  // Per-code detail cache. A code present in `detailCache` was fetched successfully
-  // (value may be null = the course genuinely has no details). `detailError` tracks
-  // codes whose fetch failed — kept separate so failures stay retryable and are not
-  // confused with "no details".
-  const [detailCache, setDetailCache] = useState<Record<string, CourseDetail | null>>({});
-  const [detailError, setDetailError] = useState<Record<string, boolean>>({});
-  const [detailLoading, setDetailLoading] = useState<string | null>(null);
-  const mountedRef = useRef(true);
-  const inFlightRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
     fetch("/api/courses")
@@ -78,34 +61,6 @@ export default function Home() {
       cancelled = true;
     };
   }, []);
-
-  function fetchDetail(code: string) {
-    if (code in detailCache) return; // already have a successful result
-    if (inFlightRef.current.has(code)) return; // already fetching
-    inFlightRef.current.add(code);
-    setDetailLoading(code);
-    setDetailError((e) => {
-      if (!e[code]) return e;
-      const nextErr = { ...e };
-      delete nextErr[code];
-      return nextErr;
-    });
-    fetch(`/api/courses/${encodeURIComponent(code)}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(String(r.status));
-        return r.json();
-      })
-      .then((data: CourseDetailResponse) => {
-        if (mountedRef.current) setDetailCache((c) => ({ ...c, [code]: data.details }));
-      })
-      .catch(() => {
-        if (mountedRef.current) setDetailError((e) => ({ ...e, [code]: true }));
-      })
-      .finally(() => {
-        inFlightRef.current.delete(code);
-        if (mountedRef.current) setDetailLoading((cur) => (cur === code ? null : cur));
-      });
-  }
 
   const filterOptions = useMemo(() => getFilterOptions(courses ?? []), [courses]);
   const results = useMemo(() => filterCourses(courses ?? [], filters), [courses, filters]);
@@ -125,9 +80,7 @@ export default function Home() {
   }
 
   function toggleExpand(code: string) {
-    const next = expanded === code ? null : code;
-    setExpanded(next);
-    if (next) fetchDetail(next);
+    setExpanded((cur) => (cur === code ? null : code));
   }
 
   const hasFilters = Object.values(filters).some(Boolean);
@@ -322,15 +275,7 @@ export default function Home() {
                       </svg>
                     </button>
 
-                    {isExpanded && (
-                      <CourseExpanded
-                        course={course}
-                        detail={detailCache[course.code]}
-                        loading={detailLoading === course.code}
-                        errored={!!detailError[course.code]}
-                        onRetry={() => fetchDetail(course.code)}
-                      />
-                    )}
+                    {isExpanded && <CourseExpanded course={course} />}
                   </div>
                 );
               })}
@@ -400,37 +345,10 @@ function FilterSelect({
   );
 }
 
-function CourseExpanded({
-  course,
-  detail,
-  loading,
-  errored,
-  onRetry,
-}: {
-  course: CourseListItem;
-  detail: CourseDetail | null | undefined;
-  loading: boolean;
-  errored: boolean;
-  onRetry: () => void;
-}) {
+function CourseExpanded({ course }: { course: CourseListItem }) {
   return (
     <div className="animate-slide-down px-4 sm:px-5 pb-4 border-t border-gray-100 pt-4 space-y-4">
-      {/* Published Description */}
-      {detail?.publishedDescription && (
-        <div className="bg-blue-50 rounded-lg px-4 py-3">
-          <p className="text-sm text-gray-800 leading-relaxed">{detail.publishedDescription}</p>
-        </div>
-      )}
-
-      {/* Program Guide Title */}
-      {detail?.programGuideTitle && (
-        <div className="text-sm">
-          <span className="text-[11px] uppercase tracking-wider text-gray-400 font-medium">Program Guide Title</span>
-          <p className="text-gray-900 mt-0.5">{detail.programGuideTitle}</p>
-        </div>
-      )}
-
-      {/* Basic Details — available from the course row itself */}
+      {/* Course fields (from the courses table). course_details is not used (ADR-009). */}
       <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
         <Detail label="Course Code" value={course.code} />
         <Detail label="Grade" value={course.grade} />
@@ -441,60 +359,6 @@ function CourseExpanded({
         <Detail label="Sub-category" value={course.subCategory} />
         <Detail label="Grad Requirement" value={course.gradRequirement} />
       </dl>
-
-      {loading && (
-        <p className="text-xs text-gray-400 font-medium">Loading details…</p>
-      )}
-
-      {errored && !loading && (
-        <p className="text-xs text-red-600 font-medium">
-          Couldn’t load details.{" "}
-          <button onClick={onRetry} className="underline hover:text-red-700">
-            Retry
-          </button>
-        </p>
-      )}
-
-      {/* Grad Program Requirements */}
-      {detail?.gradRequirements && detail.gradRequirements.length > 0 && (
-        <div>
-          <h4 className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-2">Graduation Program Requirements</h4>
-          <div className="rounded-lg border border-gray-200 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 text-left">
-                  <th className="px-3 py-1.5 text-xs font-medium text-gray-500">Program</th>
-                  <th className="px-3 py-1.5 text-xs font-medium text-gray-500">Requirement</th>
-                  <th className="px-3 py-1.5 text-xs font-medium text-gray-500">Examinable</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detail.gradRequirements.map((r, i) => (
-                  <tr key={i} className="border-t border-gray-100">
-                    <td className="px-3 py-1.5 text-gray-900">{r.program}</td>
-                    <td className="px-3 py-1.5 text-gray-700">{r.requirement}</td>
-                    <td className="px-3 py-1.5 text-gray-700">{r.examinable}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Grad Program Electives */}
-      {detail?.gradElectives && detail.gradElectives.length > 0 && (
-        <div>
-          <h4 className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-1.5">Counts as Elective In</h4>
-          <div className="flex flex-wrap gap-1.5">
-            {detail.gradElectives.map((e, i) => (
-              <span key={i} className="inline-flex px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
-                {e}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, within, cleanup, waitFor } from "@testing-library/react";
-import type { CourseListItem, CourseDetail } from "@/lib/types";
+import { render, screen, fireEvent, within, cleanup } from "@testing-library/react";
+import type { CourseListItem } from "@/lib/types";
 import Home from "./page";
 
 const LIST: CourseListItem[] = [
@@ -11,26 +11,16 @@ const LIST: CourseListItem[] = [
   { code: "FR10", grade: "10", title: "Français 10", credits: "4", category: "Ministry", language: "French", subject: "Languages", subCategory: null, gradRequirement: null },
 ];
 
-const DETAILS: Record<string, CourseDetail> = {
-  MA10: { genericCourseType: null, programGuideTitle: "Mathematics", publishedDescription: "An introduction to foundational mathematics concepts.", gradRequirements: [], gradElectives: [] },
-  SC11: { genericCourseType: null, programGuideTitle: null, publishedDescription: "Exploring the sciences.", gradRequirements: [], gradElectives: ["Sciences", "Applied Skills"] },
-};
-
 function okJson(body: unknown) {
   return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
 }
 
+// The app reads only GET /api/courses (course_details is not used — ADR-009).
 function installFetch(impl?: (url: string) => Promise<Response>) {
   const fn = vi.fn((input: string | URL) => {
     const url = String(input);
     if (impl) return impl(url);
     if (url === "/api/courses") return okJson(LIST);
-    const m = url.match(/^\/api\/courses\/(.+)$/);
-    if (m) {
-      const code = decodeURIComponent(m[1]);
-      const course = LIST.find((c) => c.code === code)!;
-      return okJson({ course, details: DETAILS[code] ?? null });
-    }
     return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
   });
   global.fetch = fn as unknown as typeof fetch;
@@ -39,9 +29,10 @@ function installFetch(impl?: (url: string) => Promise<Response>) {
 
 async function renderLoaded() {
   cleanup();
-  installFetch();
+  const fetchFn = installFetch();
   render(<Home />);
   await screen.findByText("Mathematics 10");
+  return fetchFn;
 }
 
 beforeEach(() => {
@@ -155,83 +146,37 @@ describe("Home page — filtering", () => {
   });
 });
 
-describe("Home page — expand & lazy detail", () => {
-  it("lazy-loads and shows the published description on expand", async () => {
-    const fetchFn = await renderLoadedReturningFetch();
+describe("Home page — expand (courses-only, no detail fetch)", () => {
+  it("expands to show the course's own fields", async () => {
+    await renderLoaded();
+    fireEvent.click(screen.getByText("Science 11").closest("button")!);
+    const card = screen.getByText("Science 11").closest("button")!.parentElement!;
+    expect(within(card).getByText("Sub-category")).toBeInTheDocument();
+    expect(within(card).getByText("Life Sciences")).toBeInTheDocument();
+    expect(within(card).getByText("Subject")).toBeInTheDocument();
+  });
+
+  it("does NOT fetch course detail on expand", async () => {
+    const fetchFn = await renderLoaded();
     fireEvent.click(screen.getByText("Mathematics 10").closest("button")!);
-    expect(await screen.findByText("An introduction to foundational mathematics concepts.")).toBeInTheDocument();
-    expect(fetchFn).toHaveBeenCalledWith("/api/courses/MA10");
+    const detailCalls = fetchFn.mock.calls.filter((c) => String(c[0]) !== "/api/courses");
+    expect(detailCalls).toHaveLength(0);
   });
 
   it("collapses on a second click", async () => {
     await renderLoaded();
     const button = screen.getByText("Mathematics 10").closest("button")!;
     fireEvent.click(button);
-    await screen.findByText("An introduction to foundational mathematics concepts.");
+    expect(screen.getByText("Course Code")).toBeInTheDocument();
     fireEvent.click(button);
-    expect(screen.queryByText("An introduction to foundational mathematics concepts.")).not.toBeInTheDocument();
-  });
-
-  it("does not refetch a detail that is already cached", async () => {
-    const fetchFn = await renderLoadedReturningFetch();
-    const button = screen.getByText("Mathematics 10").closest("button")!;
-    fireEvent.click(button);
-    await screen.findByText("An introduction to foundational mathematics concepts.");
-    fireEvent.click(button); // collapse
-    fireEvent.click(button); // expand again
-    await screen.findByText("An introduction to foundational mathematics concepts.");
-    const detailCalls = fetchFn.mock.calls.filter((c) => String(c[0]) === "/api/courses/MA10");
-    expect(detailCalls).toHaveLength(1);
-  });
-
-  it("shows grad electives when available", async () => {
-    await renderLoaded();
-    fireEvent.click(screen.getByText("Science 11").closest("button")!);
-    expect(await screen.findByText("Counts as Elective In")).toBeInTheDocument();
-    expect(screen.getByText("Applied Skills")).toBeInTheDocument();
+    expect(screen.queryByText("Course Code")).not.toBeInTheDocument();
   });
 
   it("hides Detail fields with null values", async () => {
     await renderLoaded();
     fireEvent.click(screen.getByText("Business Education 12").closest("button")!);
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith("/api/courses/BA12"));
-    const expandedArea = screen.getByText("Business Education 12").closest("button")!.parentElement!;
-    expect(within(expandedArea).queryByText("Sub-category")).not.toBeInTheDocument();
-  });
-
-  it("shows a retry on detail-fetch failure, then recovers (no permanent poisoning)", async () => {
-    cleanup();
-    let failDetail = true;
-    installFetch((url) => {
-      if (url === "/api/courses") return okJson(LIST);
-      const m = url.match(/^\/api\/courses\/(.+)$/);
-      if (m) {
-        if (failDetail) {
-          return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as Response);
-        }
-        const code = decodeURIComponent(m[1]);
-        const course = LIST.find((c) => c.code === code)!;
-        return okJson({ course, details: DETAILS[code] ?? null });
-      }
-      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
-    });
-    render(<Home />);
-    await screen.findByText("Mathematics 10");
-    fireEvent.click(screen.getByText("Mathematics 10").closest("button")!);
-    expect(await screen.findByText(/Couldn.t load details/)).toBeInTheDocument();
-    // the failure must NOT be cached as "no details" — retry re-fetches and succeeds
-    failDetail = false;
-    fireEvent.click(screen.getByText("Retry"));
-    expect(
-      await screen.findByText("An introduction to foundational mathematics concepts.")
-    ).toBeInTheDocument();
+    const card = screen.getByText("Business Education 12").closest("button")!.parentElement!;
+    expect(within(card).queryByText("Sub-category")).not.toBeInTheDocument();
+    expect(within(card).queryByText("Grad Requirement")).not.toBeInTheDocument();
   });
 });
-
-async function renderLoadedReturningFetch() {
-  cleanup();
-  const fetchFn = installFetch();
-  render(<Home />);
-  await screen.findByText("Mathematics 10");
-  return fetchFn;
-}

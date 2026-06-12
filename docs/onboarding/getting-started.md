@@ -48,7 +48,7 @@ BC Course Finder is a **single-page Next.js app** that lets users search and exp
 Key things to know:
 
 - **One page**: The entire UI lives in `src/app/page.tsx`
-- **API-only data access**: The browser never queries Supabase directly. The app fetches `GET /api/courses` for the grid and `GET /api/courses/[code]` for per-course details (lazy-loaded when a card expands). The only write path is the secret-gated `POST /api/courses`.
+- **API-only data access**: The browser never queries Supabase directly. The app fetches `GET /api/courses` for the grid. The only write path is the secret-gated `POST /api/courses`.
 - **In-memory filtering**: Once the course list is fetched, all search/filter logic runs in the browser via `src/lib/search.ts`
 - **Server-only secrets**: The `service_role` key (`SUPABASE_SECRET_KEY`) lives only in the route handlers via `src/lib/supabase-server.ts`. RLS is enabled and there is no anon key in use.
 

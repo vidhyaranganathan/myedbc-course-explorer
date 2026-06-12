@@ -22,7 +22,7 @@ myedbc-course-explorer/
 │   │   ├── layout.tsx     # Root layout (Inter font)
 │   │   ├── page.tsx       # Search page (single page app)
 │   │   ├── globals.css    # Tailwind + base styles + animations
-│   │   └── api/courses/   # DB gateway: GET (list), GET [code] (one+details), POST (gated upsert)
+│   │   └── api/courses/   # DB gateway: GET (list), POST (gated upsert)
 │   └── lib/
 │       ├── search.ts          # In-memory filtering logic (generic)
 │       ├── supabase-server.ts # Server-only Supabase client (service_role key)
@@ -57,8 +57,7 @@ npm run db:load -- ./payload.json  # POST a JSON payload to /api/courses (gated 
 All DB access goes through Next.js Route Handlers under `src/app/api/courses/`:
 
 - `GET /api/courses` — all courses (list) as JSON; feeds the client grid + in-memory filtering.
-- `GET /api/courses/[code]` — one course plus its details (lazy-loaded when a card expands).
-- `POST /api/courses` — secret-gated bulk upsert; header `X-Api-Key` must equal env `API_WRITE_SECRET`. This is the only write path.
+- `POST /api/courses` — secret-gated bulk upsert of courses only; header `X-Api-Key` must equal env `API_WRITE_SECRET`. This is the only write path.
 
 The browser never queries Supabase directly. The `service_role` key (`SUPABASE_SECRET_KEY`) lives only in the server-side route handlers via `src/lib/supabase-server.ts`, and RLS is enabled on the DB.
 
@@ -78,11 +77,12 @@ API-facing camelCase shapes (`src/lib/types.ts`); the DB stores snake_case colum
 
 **Course (list item)**: code, grade, title, credits, category, language, subject, subCategory, gradRequirement
 
-**CourseDetail**: genericCourseType, programGuideTitle, publishedDescription, gradRequirements, gradElectives
+The `course_details` table exists in the DB but is not surfaced by any app code (ADR-009).
 
 ## Architecture Decisions
 
-- **DB source of truth via API-only gateway**: Supabase is the single source of truth; the browser reaches it only through `src/app/api/courses/` route handlers (ADR-007, supersedes ADR-004).
+- **DB source of truth via API-only gateway**: Supabase is the single source of truth; the browser reaches it only through `src/app/api/courses/` route handlers (ADR-007, supersedes ADR-004; amended by ADR-009).
+- **course_details not used by the app**: the table and its data remain in the DB but no app code references them; the API is courses-only (ADR-009).
 - **In-memory search**: `GET /api/courses` loads all courses once into the client, then filtering is instant (<10ms).
 - **No runtime deduplication**: The DB stores one row per course; the old `gradPrograms`/`DeduplicatedCourse` machinery is gone.
 - **2023 Graduation Program, grades 10-12 only**: ~3,951 courses; grade 9 and non-2023 programs do not appear (ADR-008, supersedes ADR-005).

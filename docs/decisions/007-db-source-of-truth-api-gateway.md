@@ -4,6 +4,7 @@
 **Date**: 2026-06-11
 **Supersedes**: ADR-004
 **Amends**: ADR-006
+**Amended by**: ADR-009 (course_details dropped from the app; GET [code] removed; POST is courses-only)
 
 ## Context
 

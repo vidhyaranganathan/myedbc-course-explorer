@@ -9,8 +9,7 @@ The Supabase Postgres database is the **single source of truth** (ADR-006, ADR-0
 ```
 Runtime read path (browser → API → DB):
 
-  page.tsx ──▶ GET /api/courses        ──▶ Supabase: courses        (~3,951 rows)
-            └─ GET /api/courses/[code] ──▶ Supabase: course_details (one row, lazy)
+  page.tsx ──▶ GET /api/courses ──▶ Supabase: courses (~3,951 rows)
 
 Write path (the ONLY way data enters the DB):
 
@@ -19,13 +18,12 @@ Write path (the ONLY way data enters the DB):
    not committed)                          equal API_WRITE_SECRET)
 ```
 
-The DB holds the **only** copy of course detail data. There is no scraper or other regeneration path — refreshing details means assembling a payload and POSTing it through the write API.
+The `course_details` table is retained in the DB but is **not used by the app** — no app code reads or writes it (ADR-009).
 
 ## Runtime Data Flow
 
-- **List** — On load, the client calls `GET /api/courses`, which returns all courses (no details) as JSON. The grid and all filtering run in memory in the browser (ADR-002 lives on, just fed by the API instead of a static file).
-- **Details** — When a course card expands, the client lazy-loads `GET /api/courses/[code]`, which returns that one course plus its `course_details` row.
-- **Writes** — The only write path is `POST /api/courses`, a secret-gated bulk upsert. The request must send `X-Api-Key` equal to env `API_WRITE_SECRET`. Scripts no longer write to Supabase directly.
+- **List** — On load, the client calls `GET /api/courses`, which returns all courses as JSON. The grid and all filtering run in memory in the browser (ADR-002 lives on, just fed by the API instead of a static file). Expanding a course card shows only `courses`-table fields — there is no second request.
+- **Writes** — The only write path is `POST /api/courses`, a secret-gated bulk upsert of courses. The request must send `X-Api-Key` equal to env `API_WRITE_SECRET`. Scripts no longer write to Supabase directly.
 
 The `service_role` key (`SUPABASE_SECRET_KEY`) lives only in the server-side route handlers (`src/lib/supabase-server.ts`). RLS is enabled on the DB, so there is no anon/publishable key in use.
 
@@ -35,7 +33,7 @@ The app shows only the **2023 Graduation Program, grades 10-12** (~3,951 courses
 
 ## Producing Data
 
-The DB holds the only copy of course detail data — there is no scraper or other regeneration path. Refreshing details means assembling a JSON payload file (snake_case rows matching the DB columns) and POSTing it through the write API. Some courses have no published description — the BC Course Registry returned empty results (mostly French-language and newer courses).
+Refreshing the data means assembling a JSON payload file (snake_case rows matching the DB columns) and POSTing it through the write API.
 
 ## Loading Data (re-sync)
 
@@ -51,13 +49,10 @@ The payload file uses snake_case rows matching the DB columns:
 
 ```jsonc
 {
-  "courses":       [ { "code": "...", "grade": "...", "title": "...", "credits": "...",
-                       "category": "...", "language": "...", "subject": "...",
-                       "sub_category": "...", "myedb_code": "...", "trax_code": "...",
-                       "developer": "...", "grad_requirement": "..." } ],
-  "courseDetails": [ { "code": "...", "generic_course_type": "...",
-                       "program_guide_title": "...", "published_description": "...",
-                       "grad_requirements": [], "grad_electives": [] } ]
+  "courses": [ { "code": "...", "grade": "...", "title": "...", "credits": "...",
+                 "category": "...", "language": "...", "subject": "...",
+                 "sub_category": "...", "myedb_code": "...", "trax_code": "...",
+                 "developer": "...", "grad_requirement": "..." } ]
 }
 ```
 
@@ -70,7 +65,7 @@ Tables are created once by running `scripts/migrate.sql` in the Supabase SQL Edi
 | Table | Primary Key | Notes |
 |-------|-------------|-------|
 | `courses` | `(code, grade)` | 2023 Graduation Program, grades 10-12 (~3,951 rows) |
-| `course_details` | `code` | Detail text, loaded via the write API |
+| `course_details` | `code` | Retained in the DB but **not used by the app** (ADR-009) |
 
 ## Environment Variables
 
