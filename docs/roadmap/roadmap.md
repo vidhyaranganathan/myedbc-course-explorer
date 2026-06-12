@@ -4,7 +4,7 @@ Product features only. For code/design issues see [tech-debt.md](tech-debt.md). 
 
 ## Current State
 
-BC Course Finder is a functional single-page app with search and filtering across ~5K BC high school courses. Data is static JSON, deployed on Vercel Hobby.
+BC Course Finder is a functional single-page app with search and filtering across BC high school courses. The Supabase data layer is live — 3,951 courses (2023 Graduation Program, grades 10-12) and 5,569 course detail entries loaded from the BC Ministry's live Excel and BC Course Registry. The app still reads from static JSON (interim); the next step is wiring the UI to Supabase queries.
 
 ## Near-Term
 
@@ -13,7 +13,7 @@ BC Course Finder is a functional single-page app with search and filtering acros
 | R-001 | URL-based search state | Encode filters in URL query params so searches are shareable and bookmarkable | Unassigned | Planned |
 | R-002 | Course comparison | Select multiple courses to compare side-by-side | Unassigned | Planned |
 | R-003 | Improved search | Fuzzy matching, search highlighting, relevance ranking | Unassigned | Planned |
-| R-011 | Fill missing course descriptions | 951 of 5,480 courses have no `publishedDescription` (mostly French-language and newer courses). Scrape from BC curriculum website or use browser-based search to retrieve descriptions for the remaining courses | Unassigned | Planned |
+| R-011 | Fill missing course descriptions | ~951 of 5,569 courses have no `publishedDescription` (mostly French-language and newer courses). Scrape from BC curriculum website or use browser-based search to retrieve descriptions for the remaining courses | Unassigned | Planned |
 
 ## Medium-Term
 
@@ -30,4 +30,4 @@ BC Course Finder is a functional single-page app with search and filtering acros
 | R-006 | K-8 course support | Data is already in the JSON, UI would need a toggle or separate view | Unassigned | Planned |
 | R-007 | Course recommendations | Suggest related courses based on subject area or prerequisites | Unassigned | Planned |
 | R-008 | PWA support | Offline access for users with intermittent connectivity | Unassigned | Planned |
-| R-009 | Migrate data to Supabase | Move from hardcoded static JSON to Supabase database. Current approach was a deliberate PoC choice — revisit when data update frequency increases or user-generated content is needed | Unassigned | Planned |
+| R-009 | Wire app to Supabase | DB schema, load script, and scraper all updated to use live Ministry Excel. App-side query integration (replace static JSON imports in page.tsx with Supabase queries) pending. See ADR-006. | Unassigned | In Progress |

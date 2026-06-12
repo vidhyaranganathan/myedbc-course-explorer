@@ -5,96 +5,90 @@ This doc explains how course data flows from source to the running app.
 ## Overview
 
 ```
-BC Ministry Excel file
+BC Ministry Excel (live URL)
         │
-        ▼
-  npm run import          (scripts/convert-excel.ts)
+        ├──▶ scripts/load_supabase.ts    (npm run db:load)
+        │         │
+        │         ▼
+        │    Supabase: courses (3,951 rows — 2023 Graduation Program only)
         │
-        ▼
-  src/data/courses.json   (12,741 rows, committed to git)
-        │
-        ▼
-  Browser loads JSON      (page.tsx imports it statically)
-        │
-        ▼
-  Client deduplicates     (code+grade key → 4,962 unique courses)
-        │
-        ▼
-  Filtered to grades 9-12 and displayed
-
-
-BC Course Registry website
-        │
-        ▼
-  python3 scripts/scrape-course-details.py
-        │
-        ▼
-  src/data/course-details.json   (5,480 entries, committed to git)
-        │
-        ▼
-  Browser looks up details by course code
+        └──▶ scripts/scrape-course-details.py
+                  │  (uses Excel to get code list, scrapes BC Course Registry)
+                  ▼
+             src/data/course-details.json   (5,569 entries, committed to git)
+                  │
+                  ▼
+             scripts/load_supabase.ts       (npm run db:load)
+                  │
+                  ▼
+             Supabase: course_details (5,569 rows)
 ```
 
 ## Data Sources
 
-### 1. BC Ministry Excel File (`courses.json`)
+### 1. BC Ministry Excel (primary source for `courses` table)
 
-- **Source**: `~/Downloads/open_courses (1).xlsx` from the BC Ministry of Education
-- **Conversion script**: `scripts/convert-excel.ts` (run via `npm run import`)
-- **Output**: `src/data/courses.json`
-- **Fields**: code, grade, title, credits, category, language, subject, subCategory, gradProgram, gradRequirement
+- **URL**: `https://www.bced.gov.bc.ca/datacollections/course_registry_web_search/data/open_courses.xlsx`
+- **Downloaded at runtime** by `scripts/load_supabase.ts` — no manual download needed
+- **Filtered to**: 2023 Graduation Program rows only → 3,951 unique (code, grade) rows
+- **Fields loaded**: code, grade, title, credits, category, language, subject, sub_category, myedb_code, trax_code, developer, grad_requirement
+- **Fields excluded**: authorizer, open_date, ministry_subject_code (not needed). close_date and completion_end_date do not exist in the source file.
 
-Each row in the Excel file represents one course + graduation program combination. The same course code appears multiple times if it counts toward different grad programs.
+Grade 9 courses are not part of the 2023 Graduation Program and are excluded by design. The raw Excel file retains them.
 
 ### 2. BC Course Registry (`course-details.json`)
 
-- **Source**: BC Course Registry website (scraped per course code)
+- **Source**: BC Course Registry website scraped per course code
 - **Script**: `scripts/scrape-course-details.py`
-- **Output**: `src/data/course-details.json`
+- **Code list**: Downloaded from the live Ministry Excel at scrape time — always in sync
+- **Output**: `src/data/course-details.json` (committed to git, 5,569 entries)
 - **Fields**: programGuideTitle, publishedDescription, genericCourseType, gradRequirements, gradElectives
-- **Last run**: Once during initial project setup (2025). Has not been re-run since.
+- **Coverage**: All unique course codes across all grad programs (superset — not filtered to 2023)
 
 #### How the scraper works
 
-The script uses `curl` via subprocess to scrape the BC Course Registry at `www.bced.gov.bc.ca/datacollections/course_registry_web_search`. It is not browser automation — it makes raw HTTP requests.
+```
+1. Download live Excel from Ministry URL → extract all unique course codes
+2. Merge with existing course-details.json (skip already-scraped codes)
+3. For each new code:
+   a. POST to run-search.php to establish a cookie session
+   b. GET run-details.php?courseCode={code}
+   c. Parse HTML with regex → extract title, description, type, grad data
+   d. Save progress every 100 courses (resumable)
+   e. Rate-limited to ~3 req/s (0.3s sleep)
+   f. Session refreshes every 200 requests
+4. Write updated course-details.json
+```
 
-```
-For each unique course code in courses.json:
-    1. POST to run-search.php to establish a session (cookie-based)
-    2. GET run-details.php?courseCode={code} to fetch the detail page
-    3. Parse the HTML response with regex to extract:
-       - Program Guide Title
-       - Published Description
-       - Generic Course Type
-       - Grad Program Requirements (table: program, requirement, examinable)
-       - Grad Program Electives (table: program names)
-    4. Save to progress file every 100 courses (resumable)
-    5. Rate-limited to ~3 requests/second (0.3s sleep)
-    6. Session refreshes every 200 requests
-```
+The scraper resumes automatically — re-running skips already-scraped codes.
 
 #### Limitations
 
-- **Regex-based HTML parsing** — fragile, breaks if the BC Course Registry changes its HTML structure
-- **951 courses have no description** — the registry returned empty results for these (mostly French-language and newer courses)
-- **No validation** — doesn't verify if scraped data is complete or correct
-- **Cookie/session dependent** — the BC registry requires a search session before detail pages work
-- **Single-threaded** — takes ~30 minutes to scrape all 5,480 courses at 3 req/s
-
-The scraper is resumable — if you interrupt it, re-running picks up where it left off (progress saved to `/tmp/bced_scrape_progress.json`).
+- **Regex-based HTML parsing** — fragile if the BC Course Registry changes its HTML structure
+- **Some courses have no description** — the registry returned empty results (mostly French-language and newer courses)
+- **Cookie/session dependent** — requires a search session before detail pages work
+- **Single-threaded** — takes ~30 min to scrape all codes from scratch at 3 req/s
 
 ## Updating Data
 
-When the Ministry publishes a new Excel file:
+When the Ministry publishes updated data:
 
-1. Download the new file
-2. Run `npm run import -- /path/to/file.xlsx`
-3. Optionally re-run the scraper if new course codes appear: `python3 scripts/scrape-course-details.py`
-4. Commit both JSON files
-5. Deploy
+1. Run `npm run db:load` — downloads the latest Excel automatically and upserts `courses`
+2. Run `python3 scripts/scrape-course-details.py` — picks up any new course codes, skips existing
+3. Run `npm run db:load` again — upserts the updated `course-details.json` into `course_details`
+4. Commit the updated `src/data/course-details.json`
 
-## Important Notes
+## Supabase Schema
 
-- Both JSON files are **committed to git** and ship with the app — there is no runtime data fetching
-- The `xlsx` npm package is in `devDependencies` only — it has known vulnerabilities but is only used locally in the import script, never in production
-- Deduplication happens at runtime in the browser, not during the import step
+Tables are created by running `scripts/migrate.sql` in the Supabase SQL Editor (one-time setup).
+To reset: `DROP TABLE IF EXISTS course_details, courses CASCADE;` then re-run the SQL.
+
+| Table | Source | Primary Key | Rows |
+|-------|--------|-------------|------|
+| `courses` | BC Ministry Excel (live URL) | `(code, grade)` | 3,951 |
+| `course_details` | course-details.json (scraped) | `code` | 5,569 |
+
+## Fallback
+
+If the Ministry URL is unavailable, `npm run db:load -- --json` falls back to `src/data/courses.json`.
+Note: this fallback has `null` for `myedb_code`, `trax_code`, and `developer`.
