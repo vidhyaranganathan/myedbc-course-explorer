@@ -3,52 +3,45 @@
 ## System Diagram
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     Vercel (CDN)                        │
-│                                                         │
-│  ┌───────────────────────────────────────────────────┐  │
-│  │              Next.js Application                  │  │
-│  │                                                   │  │
-│  │  ┌─────────────┐  ┌─────────────────────────────┐│  │
-│  │  │ Static JSON  │  │       Client-Side App       ││  │
-│  │  │ (interim)    │  │                             ││  │
-│  │  │ courses.json │──│  page.tsx (single page)     ││  │
-│  │  │ course-      │  │    ├─ Filter UI             ││  │
-│  │  │ details.json │──│    ├─ Course list            ││  │
-│  │  │              │  │    └─ Detail expansion       ││  │
-│  │  └─────────────┘  │                             ││  │
-│  │                    │  search.ts (filter engine)   ││  │
-│  │                    │  types.ts  (Course type)     ││  │
-│  │                    └─────────────────────────────┘│  │
-│  └───────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
-         ▲ app phase (pending): replace JSON imports
-         │ with Supabase queries
-         │
-┌─────────────────────────────────────────────────────────┐
-│                  Supabase (Postgres)                    │
-│                                                         │
-│  courses         (code, grade) PK    3,951 rows         │
-│  course_details  code PK             5,569 rows         │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                         Vercel (CDN)                          │
+│                                                                │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │                  Next.js Application                      │ │
+│  │                                                          │ │
+│  │  ┌───────────────────────┐    ┌───────────────────────┐  │ │
+│  │  │   Client-Side App     │    │   API Route Handlers  │  │ │
+│  │  │   (browser)           │    │   src/app/api/courses │  │ │
+│  │  │                       │    │                       │  │ │
+│  │  │  page.tsx             │───▶│  GET  /api/courses    │  │ │
+│  │  │   ├─ Filter UI        │◀───│  POST /api/courses    │  │ │
+│  │  │   ├─ Course list      │    │        (gated)        │  │ │
+│  │  │   └─ Detail expansion │    │                       │  │ │
+│  │  │  search.ts (in-memory │    │                       │  │ │
+│  │  │   filter engine)      │    │  supabase-server.ts   │  │ │
+│  │  │  types.ts             │    │  courses-mapper.ts    │  │ │
+│  │  └───────────────────────┘    └──────────┬────────────┘  │ │
+│  └─────────────────────────────────────────│───────────────┘ │
+└────────────────────────────────────────────│─────────────────┘
+                                              │ service_role key
+                                              │ (server-only)
+┌─────────────────────────────────────────────▼─────────────────┐
+│                     Supabase (Postgres)                        │
+│                     SINGLE SOURCE OF TRUTH                      │
+│                                                                │
+│  courses         (code, grade) PK   ~3,951 rows                │
+│  course_details  code PK   (retained, unused by app — ADR-009) │
+│  RLS enabled — no anon access                                  │
+└────────────────────────────────────────────────────────────────┘
 
-Data pipeline (runs on developer machine):
+The browser NEVER queries Supabase directly. All reads and writes go
+through the API route handlers (ADR-007).
 
-  ┌──────────────────────────┐
-  │ BC Ministry Excel (live) │───▶ scripts/load_supabase.ts ──▶ courses (Supabase)
-  │ (downloaded at runtime)  │
-  └──────────────────────────┘
+Write path (the only way data enters the DB):
 
-  ┌──────────────────────────┐
-  │ BC Ministry Excel (live) │───▶ scripts/scrape-course-details.py
-  │ (code list source)       │         │
-  └──────────────────────────┘         ▼
-                                  course-details.json (committed)
-  ┌──────────────────────────┐         │
-  │ BC Course Registry site  │─────────┘
-  │ (detail data per code)   │
-  └──────────────────────────┘
-                                  scripts/load_supabase.ts ──▶ course_details (Supabase)
+  payload.json ──▶ npm run db:load ──▶ POST /api/courses ──▶ Supabase
+  (assembled,        (load_supabase.ts)   (X-Api-Key ==
+   not committed)                          API_WRITE_SECRET)
 ```
 
 ## Key Components
@@ -57,10 +50,25 @@ Data pipeline (runs on developer machine):
 
 The entire UI is a single client component (`"use client"`). It:
 
-1. Imports both JSON data files at build time (interim — to be replaced with Supabase queries)
-2. Filters to grades 9-12 only
-3. Renders a filter bar + paginated course list
-4. Expands course cards to show scraped details from `course-details.json`
+1. Fetches the course list from `GET /api/courses`
+2. Renders a filter bar + paginated course list (2023 Graduation Program, grades 10-12)
+3. Expands a course card to show its `courses`-table fields — no second request (ADR-009)
+
+### `src/app/api/courses/` — The Data Gateway
+
+The only path between the app and Supabase (ADR-007):
+
+- `GET /api/courses` — returns all courses; feeds the grid + in-memory filtering
+- `GET /api/courses/[code]` — one course (REST get-by-id, no `course_details` — ADR-009); not used by the current UI, available for API consumers
+- `POST /api/courses` — secret-gated bulk upsert of courses; the `X-Api-Key` header must equal env `API_WRITE_SECRET`. This is the only write path.
+
+### `src/lib/supabase-server.ts` — Server-Only DB Client
+
+Creates the Supabase client using the `service_role` key (`SUPABASE_SECRET_KEY`). Imported only by the route handlers — never by client code. RLS is enabled on the DB and there is no anon key in use.
+
+### `src/lib/courses-mapper.ts` — DB ↔ API Mapping
+
+Maps the DB's snake_case columns to the API-facing camelCase shapes (and back for upserts).
 
 ### `src/lib/search.ts` — Filter Engine
 
@@ -71,29 +79,19 @@ Generic filtering functions that work with any type extending the `Searchable` i
 
 ### `src/lib/types.ts` — Type Definitions
 
-Defines the `Course` interface matching the raw JSON structure.
-
-### `src/data/` — Static Data (interim fallback)
-
-Two committed JSON files used as the seed source for Supabase and as an interim data layer until the app-phase Supabase integration is complete:
-- `courses.json` — fallback only (live Excel used as primary source)
-- `course-details.json` — scraped data, committed after each scraper run
+Defines the API-facing `Course` / `CourseDetail` interfaces (camelCase) and the snake_case upsert row shapes.
 
 ### `scripts/migrate.sql` — Database Schema
 
-DDL for the two Supabase tables. Run once in the Supabase SQL Editor to create the schema.
+DDL for the Supabase tables. Run once in the Supabase SQL Editor to create the schema.
 
 ### `scripts/load_supabase.ts` — Data Loader
 
-Downloads the live BC Ministry Excel, filters to 2023 Graduation Program, and upserts `courses`. Also upserts `course_details` from the committed `course-details.json`. Run via `npm run db:load`.
-
-### `scripts/scrape-course-details.py` — Detail Scraper
-
-Downloads the live Excel for the course code list, then scrapes the BC Course Registry for per-course details. Resumes automatically. Run via `python3 scripts/scrape-course-details.py`.
+A thin client: reads a JSON payload file and POSTs it to `/api/courses`. It does not write to Supabase directly. Run via `npm run db:load -- ./payload.json`.
 
 ## Design Principles
 
-1. **Simplicity over sophistication**: Client-side filtering across ~4K courses remains instant
-2. **Supabase as the runtime data layer**: Replaces static JSON imports; enables data updates without redeployment (see ADR-006)
-3. **Live Excel as source of truth**: Both the loader and scraper pull from the Ministry URL directly — no stale local files
-4. **Fast iteration**: One file for the UI, one file for search logic, one file for types
+1. **DB as the single source of truth**: Supabase holds the data; updates ship without redeploying the app (ADR-006, ADR-007)
+2. **API-only gateway**: The browser never touches Supabase directly; all access goes through `src/app/api/courses/`, and the `service_role` key stays server-side (ADR-007)
+3. **In-memory filtering**: Once the course list is fetched, filtering across ~3,951 courses is instant (ADR-002)
+4. **Focused scope**: 2023 Graduation Program, grades 10-12 only — one row per course, no runtime deduplication (ADR-008)

@@ -12,7 +12,7 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "text-summary", "html"],
       include: ["src/lib/**", "src/app/**"],
-      exclude: ["src/__tests__/**", "src/data/**"],
+      exclude: ["src/__tests__/**"],
       thresholds: {
         statements: 75,
         branches: 75,

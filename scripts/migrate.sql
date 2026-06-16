@@ -43,7 +43,11 @@ CREATE TABLE IF NOT EXISTS courses (
 );
 
 -- ── Table 2: course_details ───────────────────────────────────────────────────
--- Source: course-details.json (scraper output from BC Course Registry)
+-- NOTE: This table is currently NOT used by the application (ADR-009) — no app
+-- code reads or writes it, and the API is courses-only. It is retained here (and
+-- its data preserved in the DB) for future use, e.g. when a trustworthy source
+-- for course descriptions exists.
+--
 -- One row per course code (not per grade). Joins to courses on code.
 -- No FK to courses: course_details is keyed by code alone while courses PK
 -- is (code, grade).
@@ -75,3 +79,16 @@ CREATE INDEX IF NOT EXISTS idx_courses_subject      ON courses (subject);
 CREATE INDEX IF NOT EXISTS idx_courses_language     ON courses (language);
 CREATE INDEX IF NOT EXISTS idx_courses_developer    ON courses (developer);
 CREATE INDEX IF NOT EXISTS idx_courses_grad_req     ON courses (grad_requirement);
+
+-- ── Constraint: course code is globally unique ────────────────────────────────
+-- The PK is (code, grade), but the read paths and the UI treat `code` as the
+-- course identity (e.g. the React list keys). The data confirms it — 0 codes
+-- span more than one grade. This constraint makes the
+-- invariant explicit so a future load that violates it fails loudly instead of
+-- silently corrupting reads (TD-016). Idempotent — safe to re-run.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'courses_code_unique') THEN
+    ALTER TABLE courses ADD CONSTRAINT courses_code_unique UNIQUE (code);
+  END IF;
+END $$;

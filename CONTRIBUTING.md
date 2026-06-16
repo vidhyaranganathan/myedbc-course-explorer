@@ -23,7 +23,7 @@ You edit a file
     ├─ Auto-lint ──────── ESLint runs on .ts/.tsx files
     ├─ Auto-test ──────── Vitest runs if search.ts or page.tsx changed
     ├─ Drift detector ─── Checks your change against Architecture Decision Records
-    └─ Data guard ──────── Blocks direct edits to src/data/*.json
+    └─ Data guard ──────── Blocks direct edits to src/data/*.json (those files no longer exist — data lives in Supabase, reached via the API layer)
 ```
 
 ### What happens when you push
@@ -100,24 +100,27 @@ Do **not** name branches after yourself (e.g. `Anitha`, `PriyaK`).
 
 ## Project Architecture
 
-Single-page Next.js app, no database. All data is static JSON loaded client-side.
+Single-page Next.js app backed by a Supabase Postgres database. The DB is the single source of truth, reached only through Next.js Route Handlers under `src/app/api/courses/` — the browser never queries Supabase directly (ADR-007). The app shows the 2023 Graduation Program, grades 10-12 only (ADR-008).
 
 | File | Purpose |
 |------|---------|
 | `src/app/page.tsx` | The entire UI — search, filters, course list |
-| `src/lib/search.ts` | Client-side filtering engine |
-| `src/lib/types.ts` | Course type definitions |
-| `src/data/courses.json` | Course data (generated, do not edit by hand) |
-| `src/data/course-details.json` | Course descriptions (generated, do not edit by hand) |
+| `src/app/api/courses/route.ts` | `GET` (all courses) + `POST` (secret-gated bulk upsert) |
+| `src/app/api/courses/[code]/route.ts` | `GET` one course + its details (lazy-loaded) |
+| `src/lib/search.ts` | In-memory filtering engine |
+| `src/lib/supabase-server.ts` | Server-only Supabase client (service_role key) |
+| `src/lib/courses-mapper.ts` | Maps DB snake_case rows ↔ API camelCase shapes |
+| `src/lib/types.ts` | Course / CourseDetail type definitions |
 
 Read the [Architecture Overview](docs/architecture/overview.md) and [Decision Records](docs/decisions/) for the full picture.
 
-## Data Files
+## Course Data
 
-**Do not edit `src/data/*.json` by hand.** The data guard hook will block you. These files are generated:
+Course data lives in Supabase, not in committed files. There are no `src/data/*.json` files — the data guard hook still blocks any attempt to recreate them.
 
-- `courses.json` — from `npm run import` (Excel conversion)
-- `course-details.json` — from `python3 scripts/scrape-course-details.py`
+- **Read**: the app fetches `GET /api/courses` (the grid) and `GET /api/courses/[code]` (details when a card expands).
+- **Write**: the only write path is `POST /api/courses` (secret-gated by the `X-Api-Key` header, which must match env `API_WRITE_SECRET`).
+- **Re-sync**: produce a JSON payload file, then run `npm run db:load -- ./payload.json` to POST it through the API.
 
 See the [Data Pipeline](docs/onboarding/data-pipeline.md) doc for details.
 

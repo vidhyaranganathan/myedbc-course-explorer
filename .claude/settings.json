@@ -36,7 +36,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "file_path=$(echo \"$MCP_TOOL_INPUT\" | grep -o '\"file_path\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4); case \"$file_path\" in */src/data/*) echo 'BLOCK: Data files are generated. Use npm run import or the scrape script instead.' && exit 1 ;; esac"
+            "command": "file_path=$(echo \"$MCP_TOOL_INPUT\" | grep -o '\"file_path\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4); case \"$file_path\" in */src/data/*) echo 'BLOCK: src/data/ was removed — Supabase is the source of truth (ADR-007). Do not reintroduce committed data files; load data via the API with: npm run db:load -- ./payload.json' && exit 1 ;; esac"
           }
         ]
       },

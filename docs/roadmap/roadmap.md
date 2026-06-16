@@ -4,7 +4,7 @@ Product features only. For code/design issues see [tech-debt.md](tech-debt.md). 
 
 ## Current State
 
-BC Course Finder is a functional single-page app with search and filtering across BC high school courses. The Supabase data layer is live — 3,951 courses (2023 Graduation Program, grades 10-12) and 5,569 course detail entries loaded from the BC Ministry's live Excel and BC Course Registry. The app still reads from static JSON (interim); the next step is wiring the UI to Supabase queries.
+BC Course Finder is a functional single-page app with search and filtering across BC high school courses (2023 Graduation Program, grades 10-12). Supabase is the single source of truth, reached only through the `src/app/api/courses/` API layer — the app fetches `GET /api/courses` for the grid and `GET /api/courses/[code]` for details, and writes go through the secret-gated `POST /api/courses`. The static JSON files have been removed. See ADR-006, ADR-007, ADR-008.
 
 ## Near-Term
 
@@ -27,7 +27,7 @@ BC Course Finder is a functional single-page app with search and filtering acros
 
 | ID | Feature | Description | Assigned | Status |
 |----|---------|-------------|----------|--------|
-| R-006 | K-8 course support | Data is already in the JSON, UI would need a toggle or separate view | Unassigned | Planned |
+| R-006 | K-8 course support | Would require widening the DB load scope (K-8 no longer ships with the app) plus a UI toggle or separate view | Unassigned | Planned |
 | R-007 | Course recommendations | Suggest related courses based on subject area or prerequisites | Unassigned | Planned |
 | R-008 | PWA support | Offline access for users with intermittent connectivity | Unassigned | Planned |
-| R-009 | Wire app to Supabase | DB schema, load script, and scraper all updated to use live Ministry Excel. App-side query integration (replace static JSON imports in page.tsx with Supabase queries) pending. See ADR-006. | Unassigned | In Progress |
+| R-009 | Wire app to Supabase | Done (2026-06-11): app reads exclusively from the DB via the `src/app/api/courses/` API layer; static JSON imports and runtime dedup removed; writes go through the gated `POST /api/courses`. See ADR-006, ADR-007, ADR-008. | Unassigned | Done |

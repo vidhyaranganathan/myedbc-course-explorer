@@ -1,6 +1,6 @@
 # ADR-004: Deduplication at Runtime
 
-**Status**: Accepted  
+**Status**: Superseded by ADR-007
 **Date**: 2025
 
 ## Context
