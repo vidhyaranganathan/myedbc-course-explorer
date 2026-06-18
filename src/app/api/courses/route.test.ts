@@ -62,7 +62,7 @@ function courseRow(code: string) {
   return {
     code, grade: "10", title: `Course ${code}`, credits: "4",
     category: "Ministry", language: "English", subject: "Sciences",
-    sub_category: null, grad_requirement: null,
+    sub_category: null, grad_requirement: null, published_description: null,
   };
 }
 
@@ -85,7 +85,7 @@ describe("GET /api/courses", () => {
           {
             code: "MA10", grade: "10", title: "Mathematics 10", credits: "4",
             category: "Ministry", language: "English", subject: "Mathematics",
-            sub_category: "Numeracy", grad_requirement: "Required",
+            sub_category: "Numeracy", grad_requirement: "Required", published_description: null,
           },
         ],
         error: null,
@@ -98,7 +98,7 @@ describe("GET /api/courses", () => {
       {
         code: "MA10", grade: "10", title: "Mathematics 10", credits: "4",
         category: "Ministry", language: "English", subject: "Mathematics",
-        subCategory: "Numeracy", gradRequirement: "Required",
+        subCategory: "Numeracy", gradRequirement: "Required", publishedDescription: null,
       },
     ]);
   });
