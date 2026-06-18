@@ -16,6 +16,7 @@ export interface CourseListItem {
   subject: string | null;
   subCategory: string | null;
   gradRequirement: string | null;
+  publishedDescription: string | null;
 }
 
 /** Backwards-compatible alias. A course is one DB row. */
@@ -35,6 +36,7 @@ export interface CourseUpsertRow {
   trax_code: string | null;
   developer: string | null;
   grad_requirement: string | null;
+  published_description: string | null;
 }
 
 export interface CourseUpsertBody {
