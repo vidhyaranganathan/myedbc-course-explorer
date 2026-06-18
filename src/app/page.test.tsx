@@ -4,11 +4,11 @@ import type { CourseListItem } from "@/lib/types";
 import Home from "./page";
 
 const LIST: CourseListItem[] = [
-  { code: "MA10", grade: "10", title: "Mathematics 10", credits: "4", category: "Ministry", language: "English", subject: "Mathematics", subCategory: null, gradRequirement: "Required" },
-  { code: "EN10", grade: "10", title: "English Language Arts 10", credits: "4", category: "Ministry", language: "English", subject: "English Language Arts", subCategory: null, gradRequirement: "Required" },
-  { code: "SC11", grade: "11", title: "Science 11", credits: "4", category: "Ministry", language: "English", subject: "Sciences", subCategory: "Life Sciences", gradRequirement: null },
-  { code: "BA12", grade: "12", title: "Business Education 12", credits: "4", category: "Board Authority Authorized", language: "English", subject: "Business", subCategory: null, gradRequirement: null },
-  { code: "FR10", grade: "10", title: "Français 10", credits: "4", category: "Ministry", language: "French", subject: "Languages", subCategory: null, gradRequirement: null },
+  { code: "MA10", grade: "10", title: "Mathematics 10", credits: "4", category: "Ministry", language: "English", subject: "Mathematics", subCategory: null, gradRequirement: "Required", publishedDescription: null },
+  { code: "EN10", grade: "10", title: "English Language Arts 10", credits: "4", category: "Ministry", language: "English", subject: "English Language Arts", subCategory: null, gradRequirement: "Required", publishedDescription: "Core literacy course." },
+  { code: "SC11", grade: "11", title: "Science 11", credits: "4", category: "Ministry", language: "English", subject: "Sciences", subCategory: "Life Sciences", gradRequirement: null, publishedDescription: null },
+  { code: "BA12", grade: "12", title: "Business Education 12", credits: "4", category: "Board Authority Authorized", language: "English", subject: "Business", subCategory: null, gradRequirement: null, publishedDescription: null },
+  { code: "FR10", grade: "10", title: "Français 10", credits: "4", category: "Ministry", language: "French", subject: "Languages", subCategory: null, gradRequirement: null, publishedDescription: null },
 ];
 
 function okJson(body: unknown) {
@@ -102,19 +102,18 @@ describe("Home page — filtering", () => {
     expect(screen.getByText("1 of 5 courses")).toBeInTheDocument();
   });
 
-  it("filters by grade dropdown", async () => {
+  it("filters by grade chip", async () => {
     await renderLoaded();
-    const selects = screen.getAllByRole("combobox");
-    fireEvent.change(selects[0], { target: { value: "11" } });
+    fireEvent.click(screen.getByRole("button", { name: "Grade 11" }));
     expect(screen.getByText("Science 11")).toBeInTheDocument();
     expect(screen.queryByText("Mathematics 10")).not.toBeInTheDocument();
   });
 
-  it("combines multiple filters", async () => {
+  it("combines grade chip with dropdown filter", async () => {
     await renderLoaded();
-    const selects = screen.getAllByRole("combobox");
-    fireEvent.change(selects[0], { target: { value: "10" } });
-    fireEvent.change(selects[2], { target: { value: "French" } });
+    fireEvent.click(screen.getByRole("button", { name: "Grade 10" }));
+    fireEvent.click(screen.getByRole("button", { name: /all languages/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /french/i }));
     expect(screen.getByText("Français 10")).toBeInTheDocument();
     expect(screen.queryByText("Mathematics 10")).not.toBeInTheDocument();
     expect(screen.getByText("1 of 5 courses")).toBeInTheDocument();
@@ -140,17 +139,44 @@ describe("Home page — filtering", () => {
     expect(screen.getByText("Clear filters")).toBeInTheDocument();
   });
 
-  it("renders all five filter dropdowns", async () => {
+  it("renders grade chips and four multi-select dropdowns", async () => {
     await renderLoaded();
-    expect(screen.getAllByRole("combobox")).toHaveLength(5);
+    expect(screen.getByRole("button", { name: "Grade 10" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Grade 11" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Grade 12" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /all categories/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /all languages/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /all subjects/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /all credits/i })).toBeInTheDocument();
+  });
+
+  it("filters by multi-select dropdown (OR match across selections)", async () => {
+    await renderLoaded();
+    fireEvent.click(screen.getByRole("button", { name: /all subjects/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Mathematics/i }));
+    expect(screen.getByText("Mathematics 10")).toBeInTheDocument();
+    expect(screen.queryByText("English Language Arts 10")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: /English Language Arts/i }));
+    expect(screen.getByText("Mathematics 10")).toBeInTheDocument();
+    expect(screen.getByText("English Language Arts 10")).toBeInTheDocument();
+    expect(screen.queryByText("Science 11")).not.toBeInTheDocument();
+  });
+
+  it("filters by multiple grade chips (OR match)", async () => {
+    await renderLoaded();
+    fireEvent.click(screen.getByRole("button", { name: "Grade 11" }));
+    fireEvent.click(screen.getByRole("button", { name: "Grade 12" }));
+    expect(screen.getByText("Science 11")).toBeInTheDocument();
+    expect(screen.getByText("Business Education 12")).toBeInTheDocument();
+    expect(screen.queryByText("Mathematics 10")).not.toBeInTheDocument();
   });
 });
 
 describe("Home page — expand (courses-only, no detail fetch)", () => {
   it("expands to show the course's own fields", async () => {
     await renderLoaded();
-    fireEvent.click(screen.getByText("Science 11").closest("button")!);
-    const card = screen.getByText("Science 11").closest("button")!.parentElement!;
+    const card = screen.getByText("Science 11").closest("article")!;
+    fireEvent.click(within(card).getByRole("button", { name: "Toggle details" }));
     expect(within(card).getByText("Sub-category")).toBeInTheDocument();
     expect(within(card).getByText("Life Sciences")).toBeInTheDocument();
     expect(within(card).getByText("Subject")).toBeInTheDocument();
@@ -158,25 +184,42 @@ describe("Home page — expand (courses-only, no detail fetch)", () => {
 
   it("does NOT fetch course detail on expand", async () => {
     const fetchFn = await renderLoaded();
-    fireEvent.click(screen.getByText("Mathematics 10").closest("button")!);
+    const card = screen.getByText("Mathematics 10").closest("article")!;
+    fireEvent.click(within(card).getByRole("button", { name: "Toggle details" }));
     const detailCalls = fetchFn.mock.calls.filter((c) => String(c[0]) !== "/api/courses");
     expect(detailCalls).toHaveLength(0);
   });
 
   it("collapses on a second click", async () => {
     await renderLoaded();
-    const button = screen.getByText("Mathematics 10").closest("button")!;
+    const card = screen.getByText("Mathematics 10").closest("article")!;
+    const button = within(card).getByRole("button", { name: "Toggle details" });
     fireEvent.click(button);
-    expect(screen.getByText("Course Code")).toBeInTheDocument();
+    expect(within(card).getByText("Language")).toBeInTheDocument();
     fireEvent.click(button);
-    expect(screen.queryByText("Course Code")).not.toBeInTheDocument();
+    expect(within(card).queryByText("Language")).not.toBeInTheDocument();
   });
 
   it("hides Detail fields with null values", async () => {
     await renderLoaded();
-    fireEvent.click(screen.getByText("Business Education 12").closest("button")!);
-    const card = screen.getByText("Business Education 12").closest("button")!.parentElement!;
+    const card = screen.getByText("Business Education 12").closest("article")!;
+    fireEvent.click(within(card).getByRole("button", { name: "Toggle details" }));
     expect(within(card).queryByText("Sub-category")).not.toBeInTheDocument();
-    expect(within(card).queryByText("Grad Requirement")).not.toBeInTheDocument();
+    expect(within(card).queryByText("Grad requirement")).not.toBeInTheDocument();
+  });
+
+  it("shows published description when non-empty", async () => {
+    await renderLoaded();
+    const card = screen.getByText("English Language Arts 10").closest("article")!;
+    fireEvent.click(within(card).getByRole("button", { name: "Toggle details" }));
+    expect(within(card).getByText("Published description")).toBeInTheDocument();
+    expect(within(card).getByText("Core literacy course.")).toBeInTheDocument();
+  });
+
+  it("hides published description section when empty", async () => {
+    await renderLoaded();
+    const card = screen.getByText("Mathematics 10").closest("article")!;
+    fireEvent.click(within(card).getByRole("button", { name: "Toggle details" }));
+    expect(within(card).queryByText("Published description")).not.toBeInTheDocument();
   });
 });
