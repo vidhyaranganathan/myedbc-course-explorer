@@ -43,7 +43,7 @@ describe("GET /api/courses/[code]", () => {
       data: [{
         code: "MA10", grade: "10", title: "Mathematics 10", credits: "4",
         category: "Ministry", language: "English", subject: "Mathematics",
-        sub_category: null, grad_requirement: "Required",
+        sub_category: null, grad_requirement: "Required", published_description: null,
       }],
       error: null,
     });
@@ -53,7 +53,7 @@ describe("GET /api/courses/[code]", () => {
     expect(body).toEqual({
       code: "MA10", grade: "10", title: "Mathematics 10", credits: "4",
       category: "Ministry", language: "English", subject: "Mathematics",
-      subCategory: null, gradRequirement: "Required",
+      subCategory: null, gradRequirement: "Required", publishedDescription: null,
     });
   });
 

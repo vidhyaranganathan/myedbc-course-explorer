@@ -6,7 +6,7 @@ import type { CourseListItem } from "./types";
 
 /** Columns selected for the course list. */
 export const COURSE_COLUMNS =
-  "code, grade, title, credits, category, language, subject, sub_category, grad_requirement";
+  "code, grade, title, credits, category, language, subject, sub_category, grad_requirement, published_description";
 
 interface CourseDbRow {
   code: string;
@@ -18,6 +18,7 @@ interface CourseDbRow {
   subject: string | null;
   sub_category: string | null;
   grad_requirement: string | null;
+  published_description: string | null;
 }
 
 export function toCourseListItem(row: CourseDbRow): CourseListItem {
@@ -31,5 +32,6 @@ export function toCourseListItem(row: CourseDbRow): CourseListItem {
     subject: row.subject,
     subCategory: row.sub_category,
     gradRequirement: row.grad_requirement,
+    publishedDescription: row.published_description,
   };
 }

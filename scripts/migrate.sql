@@ -80,6 +80,10 @@ CREATE INDEX IF NOT EXISTS idx_courses_language     ON courses (language);
 CREATE INDEX IF NOT EXISTS idx_courses_developer    ON courses (developer);
 CREATE INDEX IF NOT EXISTS idx_courses_grad_req     ON courses (grad_requirement);
 
+-- ── Column additions ─────────────────────────────────────────────────────────
+
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS published_description text;
+
 -- ── Constraint: course code is globally unique ────────────────────────────────
 -- The PK is (code, grade), but the read paths and the UI treat `code` as the
 -- course identity (e.g. the React list keys). The data confirms it — 0 codes
