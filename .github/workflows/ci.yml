@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
@@ -44,24 +44,3 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           npx vitest run --coverage 2>&1 | grep -A 100 "% Coverage report" | head -20 >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-
-      - name: Generate coverage badge
-        if: github.ref == 'refs/heads/main'
-        run: |
-          COVERAGE=$(npx vitest run --coverage 2>&1 | grep "All files" | awk '{print $4}')
-          COVERAGE_INT=${COVERAGE%.*}
-          if [ "$COVERAGE_INT" -ge 80 ]; then COLOR="brightgreen";
-          elif [ "$COVERAGE_INT" -ge 70 ]; then COLOR="green";
-          elif [ "$COVERAGE_INT" -ge 60 ]; then COLOR="yellowgreen";
-          elif [ "$COVERAGE_INT" -ge 50 ]; then COLOR="yellow";
-          else COLOR="red"; fi
-          mkdir -p .github/badges
-          echo "{\"schemaVersion\":1,\"label\":\"coverage\",\"message\":\"${COVERAGE}%\",\"color\":\"${COLOR}\"}" > .github/badges/coverage.json
-
-      - name: Commit badge
-        if: github.ref == 'refs/heads/main'
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add .github/badges/coverage.json
-          git diff --staged --quiet || git commit -m "Update coverage badge [skip ci]" && git push
