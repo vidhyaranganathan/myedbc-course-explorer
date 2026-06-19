@@ -37,7 +37,16 @@ export default function Home() {
     return () => { cancelled = true; };
   }, []);
 
-  const filterOptions = useMemo(() => getFilterOptions(courses ?? []), [courses]);
+  const filterOptions = useMemo(() => {
+    const all = courses ?? [];
+    return {
+      grades:     getFilterOptions(filterCourses(all, { ...filters, grades: [] })).grades,
+      categories: getFilterOptions(filterCourses(all, { ...filters, categories: [] })).categories,
+      languages:  getFilterOptions(filterCourses(all, { ...filters, languages: [] })).languages,
+      subjects:   getFilterOptions(filterCourses(all, { ...filters, subjects: [] })).subjects,
+      credits:    getFilterOptions(filterCourses(all, { ...filters, credits: [] })).credits,
+    };
+  }, [courses, filters]);
   const results = useMemo(() => filterCourses(courses ?? [], filters), [courses, filters]);
   const paged = useMemo(() => results.slice(0, (page + 1) * PAGE_SIZE), [results, page]);
   const hasMore = paged.length < results.length;
@@ -154,27 +163,44 @@ export default function Home() {
             />
           </div>
 
-          <div className="mt-3 flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-semibold text-[#9AA0A6] uppercase tracking-wide shrink-0">Grade</span>
-            {filterOptions.grades.map((o) => (
-              <button
-                key={o.value}
-                onClick={() => toggleFilter("grades", o.value)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
-                  filters.grades.includes(o.value)
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-[#F6F7F9] text-[#6B7075] border-[#E6E8EB] hover:border-gray-300 hover:text-[#3C4043]"
-                }`}
-              >
-                Grade {o.value}
-              </button>
-            ))}
+          <div className="mt-4 flex flex-col gap-3">
+            <ChipGroup
+              label="Grade"
+              options={filterOptions.grades}
+              selected={filters.grades}
+              onToggle={(v) => toggleFilter("grades", v)}
+              formatOption={(v) => `Grade ${v}`}
+            />
+            <ChipGroup
+              label="Language"
+              options={filterOptions.languages}
+              selected={filters.languages}
+              onToggle={(v) => toggleFilter("languages", v)}
+            />
+            <ChipGroup
+              label="Category"
+              options={filterOptions.categories}
+              selected={filters.categories}
+              onToggle={(v) => toggleFilter("categories", v)}
+            />
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
-            <MultiSelectDropdown label="Category" selected={filters.categories} options={filterOptions.categories} onToggle={(v) => toggleFilter("categories", v)} />
-            <MultiSelectDropdown label="Language" selected={filters.languages} options={filterOptions.languages} onToggle={(v) => toggleFilter("languages", v)} />
-            <MultiSelectDropdown label="Subject" selected={filters.subjects} options={filterOptions.subjects} onToggle={(v) => toggleFilter("subjects", v)} />
-            <MultiSelectDropdown label="Credits" selected={filters.credits} options={filterOptions.credits} onToggle={(v) => toggleFilter("credits", v)} formatOption={(v) => `${v} credits`} />
+
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <MultiSelectDropdown
+              label="Subject"
+              selected={filters.subjects}
+              options={filterOptions.subjects}
+              onToggle={(v) => toggleFilter("subjects", v)}
+              onClear={() => setFilters((f) => ({ ...f, subjects: [] }))}
+            />
+            <MultiSelectDropdown
+              label="Credits"
+              selected={filters.credits}
+              options={filterOptions.credits}
+              onToggle={(v) => toggleFilter("credits", v)}
+              onClear={() => setFilters((f) => ({ ...f, credits: [] }))}
+              formatOption={(v) => `${v} credits`}
+            />
           </div>
 
           {hasFilters && (
@@ -190,7 +216,7 @@ export default function Home() {
         {/* Load error */}
         {loadError && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {`Couldn’t load courses:`} {loadError}. Please refresh to try again.
+            {`Couldn't load courses:`} {loadError}. Please refresh to try again.
           </div>
         )}
 
@@ -256,6 +282,49 @@ export default function Home() {
   );
 }
 
+function ChipGroup({
+  label,
+  options,
+  selected,
+  onToggle,
+  formatOption,
+}: {
+  label: string;
+  options: { value: string; count: number }[];
+  selected: string[];
+  onToggle: (value: string) => void;
+  formatOption?: (v: string) => string;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 flex-wrap">
+      <span className="text-[11px] font-semibold text-[#9AA0A6] uppercase tracking-[0.07em] w-[62px] shrink-0">
+        {label}
+      </span>
+      {options.map((o) => {
+        const active = selected.includes(o.value);
+        return (
+          <button
+            key={o.value}
+            onClick={() => onToggle(o.value)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border transition-all duration-150 cursor-pointer ${
+              active
+                ? "bg-[#1A56DB] text-white border-[#1A56DB] shadow-sm"
+                : "bg-white text-[#5F6368] border-[#E2E5EA] hover:border-[#BEC3CA] hover:text-[#1A1D21] hover:bg-[#F8F9FB]"
+            }`}
+          >
+            {formatOption ? formatOption(o.value) : o.value}
+            {active && (
+              <svg width="8" height="8" viewBox="0 0 8 8" fill="none" className="opacity-70 shrink-0">
+                <path d="M1 1L7 7M7 1L1 7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function pluralLabel(label: string): string {
   if (label.endsWith("s")) return label;
   if (label.endsWith("y")) return label.slice(0, -1) + "ies";
@@ -267,12 +336,14 @@ function MultiSelectDropdown({
   selected,
   options,
   onToggle,
+  onClear,
   formatOption,
 }: {
   label: string;
   selected: string[];
   options: { value: string; count: number }[];
   onToggle: (value: string) => void;
+  onClear: () => void;
   formatOption?: (v: string) => string;
 }) {
   const [open, setOpen] = useState(false);
@@ -289,6 +360,7 @@ function MultiSelectDropdown({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
+  const hasSelection = selected.length > 0;
   const buttonLabel =
     selected.length === 0
       ? `All ${pluralLabel(label)}`
@@ -298,47 +370,80 @@ function MultiSelectDropdown({
 
   return (
     <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        className="w-full px-3 py-2 border border-[#E6E8EB] rounded-lg text-sm text-left focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#F6F7F9] transition-shadow flex items-center justify-between gap-2 cursor-pointer"
-      >
-        <span className={selected.length === 0 ? "text-[#6B7075]" : "text-[#1A1D21] font-medium truncate"}>
-          {buttonLabel}
-        </span>
-        <svg
-          className={`w-4 h-4 flex-shrink-0 text-[#9AA0A6] transition-transform duration-150 ${open ? "rotate-180" : ""}`}
-          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+      <div className={`flex items-stretch rounded-lg border overflow-hidden transition-all duration-150 ${
+        hasSelection
+          ? "bg-white border-[#1A56DB] shadow-[0_0_0_3px_rgba(26,86,219,0.08)]"
+          : "bg-[#F6F7F9] border-[#E6E8EB] hover:border-[#C8CBD0] hover:bg-white"
+      }`}>
+        <button
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          aria-haspopup="listbox"
+          className="flex-1 min-w-0 px-3 py-2 text-sm text-left flex items-center gap-2 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+          <span className={`flex-1 truncate text-[13px] ${hasSelection ? "text-[#1A1D21] font-semibold" : "text-[#6B7075]"}`}>
+            {buttonLabel}
+          </span>
+          <svg
+            className={`w-4 h-4 flex-shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""} ${hasSelection ? "text-[#1A56DB]" : "text-[#9AA0A6]"}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {hasSelection && (
+          <button
+            onClick={onClear}
+            aria-label={`Clear ${label} filter`}
+            className="px-2 flex items-center border-l border-[#DBEAFE] text-[#93ADEF] hover:text-[#1A56DB] hover:bg-[#EEF2FF] transition-colors cursor-pointer"
+          >
+            <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+              <path d="M1 1L7 7M7 1L1 7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
+      </div>
 
       {open && (
         <div
           role="listbox"
           aria-multiselectable="true"
           aria-label={label}
-          className="absolute z-20 mt-1 w-full max-h-60 overflow-y-auto bg-white border border-[#E6E8EB] rounded-lg shadow-lg"
+          className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto bg-white border border-[#E6E8EB] rounded-xl shadow-[0_4px_24px_rgba(0,0,0,0.09)] py-1"
         >
-          {options.map((o) => (
-            <label
-              key={o.value}
-              className="flex items-center gap-2.5 px-3 py-2 hover:bg-[#F6F7F9] cursor-pointer"
-            >
-              <input
-                type="checkbox"
-                checked={selected.includes(o.value)}
-                onChange={() => onToggle(o.value)}
-                className="w-4 h-4 rounded border-gray-300 text-blue-600 accent-blue-600 cursor-pointer"
-              />
-              <span className="text-sm text-[#3C4043] flex-1 leading-snug">
-                {formatOption ? formatOption(o.value) : o.value}
-              </span>
-              <span className="text-xs text-[#9AA0A6]">{o.count.toLocaleString()}</span>
-            </label>
-          ))}
+          {options.map((o) => {
+            const checked = selected.includes(o.value);
+            return (
+              <label
+                key={o.value}
+                className="flex items-center gap-3 px-3.5 py-2.5 hover:bg-[#F8F9FB] cursor-pointer group transition-colors"
+              >
+                <span
+                  className={`w-[18px] h-[18px] flex-shrink-0 rounded-[5px] border-[1.5px] flex items-center justify-center transition-all duration-100 ${
+                    checked
+                      ? "bg-[#1A56DB] border-[#1A56DB]"
+                      : "bg-white border-[#D1D5DB] group-hover:border-[#9AA0A6]"
+                  }`}
+                >
+                  {checked && (
+                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                      <path d="M1.5 3.5L3.75 6L8.5 1.5" stroke="white" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </span>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => onToggle(o.value)}
+                  className="sr-only"
+                />
+                <span className="text-[13.5px] text-[#3C4043] flex-1 leading-snug">
+                  {formatOption ? formatOption(o.value) : o.value}
+                </span>
+                <span className="text-xs text-[#B0B7BF] tabular-nums">{o.count.toLocaleString()}</span>
+              </label>
+            );
+          })}
         </div>
       )}
     </div>
