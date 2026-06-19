@@ -527,7 +527,7 @@ function CourseCard({
           {description.length > 0 && (
             <div className="border-t border-[#EEF0F2] pt-[22px] flex flex-col gap-2">
               <span className="text-[11px] font-semibold tracking-[0.07em] uppercase text-[#9AA0A6]">Published description</span>
-              <p className="text-[15px] leading-[1.6] text-[#3C4043] whitespace-pre-line">{description}</p>
+              <p className="text-[15px] leading-[1.6] text-[#3C4043] whitespace-pre-line text-pretty">{description}</p>
             </div>
           )}
         </div>
