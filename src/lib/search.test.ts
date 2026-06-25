@@ -53,54 +53,68 @@ describe("filterCourses", () => {
     expect(result).toHaveLength(1);
   });
 
-  it("filters by grade", () => {
-    const filters: Filters = { ...emptyFilters, grade: "10" };
+  it("filters by a single selected grade", () => {
+    const filters: Filters = { ...emptyFilters, grades: ["10"] };
     const result = filterCourses(courses, filters);
     expect(result).toHaveLength(3);
     expect(result.every((c) => c.grade === "10")).toBe(true);
   });
 
-  it("filters by category", () => {
-    const filters: Filters = { ...emptyFilters, category: "Board Authority Authorized" };
+  it("filters by multiple grades (OR match)", () => {
+    const filters: Filters = { ...emptyFilters, grades: ["10", "11"] };
+    const result = filterCourses(courses, filters);
+    expect(result).toHaveLength(4);
+    expect(result.map((c) => c.code).sort()).toEqual(["EN10", "FR10", "MA10", "SC11"]);
+  });
+
+  it("filters by a single selected category", () => {
+    const filters: Filters = { ...emptyFilters, categories: ["Board Authority Authorized"] };
     const result = filterCourses(courses, filters);
     expect(result).toHaveLength(1);
     expect(result[0].code).toBe("BA12");
   });
 
-  it("filters by language", () => {
-    const filters: Filters = { ...emptyFilters, language: "French" };
+  it("filters by a single selected language", () => {
+    const filters: Filters = { ...emptyFilters, languages: ["French"] };
     const result = filterCourses(courses, filters);
     expect(result).toHaveLength(1);
     expect(result[0].code).toBe("FR10");
   });
 
-  it("filters by subject", () => {
-    const filters: Filters = { ...emptyFilters, subject: "Mathematics" };
+  it("filters by a single selected subject", () => {
+    const filters: Filters = { ...emptyFilters, subjects: ["Mathematics"] };
     const result = filterCourses(courses, filters);
     expect(result).toHaveLength(1);
   });
 
-  it("filters by credits", () => {
-    const filters: Filters = { ...emptyFilters, credits: "4" };
+  it("filters by multiple subjects (OR match)", () => {
+    const filters: Filters = { ...emptyFilters, subjects: ["Mathematics", "Sciences"] };
+    const result = filterCourses(courses, filters);
+    expect(result).toHaveLength(2);
+    expect(result.map((c) => c.code).sort()).toEqual(["MA10", "SC11"]);
+  });
+
+  it("filters by a single selected credits value", () => {
+    const filters: Filters = { ...emptyFilters, credits: ["4"] };
     const result = filterCourses(courses, filters);
     expect(result).toHaveLength(5);
   });
 
-  it("combines multiple filters", () => {
-    const filters: Filters = { ...emptyFilters, grade: "10", language: "English" };
+  it("combines multiple filters (AND across dimensions, OR within)", () => {
+    const filters: Filters = { ...emptyFilters, grades: ["10"], languages: ["English"] };
     const result = filterCourses(courses, filters);
     expect(result).toHaveLength(2);
     expect(result.map((c) => c.code).sort()).toEqual(["EN10", "MA10"]);
   });
 
-  it("combines text query with dropdown filters", () => {
-    const filters: Filters = { ...emptyFilters, query: "10", grade: "10" };
+  it("combines text query with chip filters", () => {
+    const filters: Filters = { ...emptyFilters, query: "10", grades: ["10"] };
     const result = filterCourses(courses, filters);
     expect(result).toHaveLength(3);
   });
 
   it("returns empty array when no courses match", () => {
-    const filters: Filters = { ...emptyFilters, grade: "08" };
+    const filters: Filters = { ...emptyFilters, grades: ["08"] };
     const result = filterCourses(courses, filters);
     expect(result).toHaveLength(0);
   });
@@ -112,8 +126,8 @@ describe("filterCourses", () => {
     expect(result[0].code).toBe("AR09");
   });
 
-  it("does not match null credits filter", () => {
-    const filters: Filters = { ...emptyFilters, credits: "" };
+  it("empty credits array matches all courses", () => {
+    const filters: Filters = { ...emptyFilters, credits: [] };
     const result = filterCourses(courses, filters);
     expect(result).toHaveLength(6);
   });
@@ -172,13 +186,16 @@ describe("getFilterOptions", () => {
 });
 
 describe("emptyFilters", () => {
-  it("has all empty string values", () => {
-    expect(Object.values(emptyFilters).every((v) => v === "")).toBe(true);
+  it("has empty string for query and empty arrays for all other filters", () => {
+    expect(emptyFilters.query).toBe("");
+    const { query: _q, ...arrays } = emptyFilters;
+    expect(_q).toBe("");
+    expect(Object.values(arrays).every((v) => Array.isArray(v) && v.length === 0)).toBe(true);
   });
 
   it("has all expected filter keys", () => {
     expect(Object.keys(emptyFilters).sort()).toEqual(
-      ["category", "credits", "grade", "language", "query", "subject"]
+      ["categories", "credits", "grades", "languages", "query", "subjects"]
     );
   });
 });

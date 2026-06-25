@@ -1,19 +1,19 @@
 export interface Filters {
   query: string;
-  grade: string;
-  category: string;
-  language: string;
-  subject: string;
-  credits: string;
+  grades: string[];
+  categories: string[];
+  languages: string[];
+  subjects: string[];
+  credits: string[];
 }
 
 export const emptyFilters: Filters = {
   query: "",
-  grade: "",
-  category: "",
-  language: "",
-  subject: "",
-  credits: "",
+  grades: [],
+  categories: [],
+  languages: [],
+  subjects: [],
+  credits: [],
 };
 
 interface Searchable {
@@ -33,11 +33,11 @@ export function filterCourses<T extends Searchable>(courses: T[], filters: Filte
     if (q && !c.title.toLowerCase().includes(q) && !c.code.toLowerCase().includes(q) && !(c.subject?.toLowerCase().includes(q))) {
       return false;
     }
-    if (filters.grade && c.grade !== filters.grade) return false;
-    if (filters.category && c.category !== filters.category) return false;
-    if (filters.language && c.language !== filters.language) return false;
-    if (filters.subject && c.subject !== filters.subject) return false;
-    if (filters.credits && c.credits !== filters.credits) return false;
+    if (filters.grades.length && !filters.grades.includes(c.grade)) return false;
+    if (filters.categories.length && !filters.categories.includes(c.category)) return false;
+    if (filters.languages.length && !filters.languages.includes(c.language)) return false;
+    if (filters.subjects.length && !filters.subjects.includes(c.subject ?? "")) return false;
+    if (filters.credits.length && !filters.credits.includes(c.credits ?? "")) return false;
     return true;
   });
 }
