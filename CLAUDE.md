@@ -92,6 +92,8 @@ The `course_details` table exists in the DB but is not surfaced by any app code 
 
 See `docs/` for onboarding guides, architecture overview, decision records, and roadmap.
 
+- `docs/exploreuserdb/` — User DB design exploration (not yet implemented). Covers the `profiles` and `saved_filter_sets` schema, RLS policies, filter sharing via `share_token`, encryption decisions, and open questions. See `schema.sql` to run in Supabase SQL Editor when ready.
+
 ## Skills
 
 - `/adr <topic>` — Auto-generate an Architecture Decision Record in `docs/decisions/`
