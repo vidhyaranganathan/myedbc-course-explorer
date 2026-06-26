@@ -191,3 +191,9 @@ next-env.d.ts
 
 # Playwright MCP scratch artifacts
 .playwright-mcp/
+
+# IDE
+.idea/
+
+# Test output
+test-results/
