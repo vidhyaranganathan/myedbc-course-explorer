@@ -1,9 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// @supabase/ssr requires middleware to refresh the session cookie on every
+// @supabase/ssr requires this proxy to refresh the session cookie on every
 // request so it doesn't expire mid-session.
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const url = process.env.SUPABASE_URL;
