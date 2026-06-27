@@ -15,8 +15,9 @@ myedbc-course-explorer/
 │   ├── skills/            # /adr, /backlog, /docs-audit, /gen-test
 │   └── agents/            # code-reviewer subagent
 ├── scripts/
-│   ├── load_supabase.ts          # Reads a JSON payload and POSTs it to /api/courses
-│   └── migrate.sql               # Supabase schema DDL (run once in SQL Editor)
+│   ├── load_supabase.ts              # Reads a JSON payload and POSTs it to /api/courses
+│   ├── migrate.sql                   # Supabase schema DDL (run once in SQL Editor)
+│   └── scrape-course-details.py     # Scrapes published_description from BC Course Registry → writes to DB
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx     # Root layout (Inter font)
@@ -50,6 +51,8 @@ npm run lint     # Run ESLint
 npm run test     # Run tests (Vitest)
 npm run test:coverage  # Run tests with coverage report
 npm run db:load -- ./payload.json  # POST a JSON payload to /api/courses (gated upsert)
+python3 scripts/scrape-course-details.py           # Scrape published_description → write to DB
+python3 scripts/scrape-course-details.py --test    # Dry-run for 3-4 courses, no DB writes
 ```
 
 ## API Layer
@@ -68,7 +71,8 @@ The DB is the single source of truth — there is no Excel and no committed JSON
 
 1. Produce a JSON payload file (snake_case rows matching the DB columns; see `scripts/load_supabase.ts` for the shape).
 2. Run `npm run db:load -- ./payload.json` to POST it to `/api/courses`, which performs the gated upsert.
-3. Schema is created once via `scripts/migrate.sql` in the Supabase SQL Editor.
+3. Run `python3 scripts/scrape-course-details.py` to scrape `published_description` from BC Course Registry and write it to the `courses` table. Resumes automatically if interrupted.
+4. Schema is created once via `scripts/migrate.sql` in the Supabase SQL Editor.
 
 Env vars (see `.env.example`, all server-only): `SUPABASE_URL`, `SUPABASE_SECRET_KEY` (service_role), `API_WRITE_SECRET`. There is no anon/publishable key in use.
 
