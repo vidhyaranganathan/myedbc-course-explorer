@@ -108,13 +108,15 @@ RLS is already enabled on `courses` — same pattern here. Since users are stude
 - A student can only read and write their own `profiles` row
 - A student can only read and write their own `saved_filter_sets` rows
 - No cross-user reads — no student can see another student's profile or filter sets
-- All DB access goes through server-side API routes (service role key) — the anon key never touches profile data directly
+- All DB access goes through server-side `/api/*` route handlers (service role key) — the browser never reads or writes profile or filter data directly to Supabase
+
+**Important:** The `service_role` key bypasses RLS entirely. The RLS policies below do not fire for route handler queries — they are a defense-in-depth backstop in case direct DB access is ever granted outside the app. The primary access control is the route handler itself: it validates the session via `@supabase/ssr`, extracts `user_id`, and scopes all queries to that user before hitting the DB.
 
 ### profiles
 ```sql
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
--- Students can only read/write their own row
+-- Defense-in-depth: only fires for direct/anon-key access, not service role
 CREATE POLICY "own profile" ON public.profiles
   USING (auth.uid() = id)
   WITH CHECK (auth.uid() = id);
@@ -124,10 +126,38 @@ CREATE POLICY "own profile" ON public.profiles
 ```sql
 ALTER TABLE public.saved_filter_sets ENABLE ROW LEVEL SECURITY;
 
+-- Defense-in-depth: only fires for direct/anon-key access, not service role
 CREATE POLICY "own filter sets" ON public.saved_filter_sets
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 ```
+
+---
+
+## API routes
+
+All user data flows through `/api/*` route handlers (consistent with ADR-007). Route handlers validate the session with `@supabase/ssr`, extract `user_id` from the session, then use the service role client to scope DB queries.
+
+### Profile
+| Method | Route | Auth | Action |
+|--------|-------|------|--------|
+| GET | `/api/user/profile` | Required | Return the logged-in user's profile row |
+| PATCH | `/api/user/profile` | Required | Update `role`, `grade_interest`, `school`, `district` |
+
+### Filter sets
+| Method | Route | Auth | Action |
+|--------|-------|------|--------|
+| GET | `/api/user/filters` | Required | List all filter sets for the logged-in user |
+| POST | `/api/user/filters` | Required | Create a new filter set |
+| PATCH | `/api/user/filters/[id]` | Required | Update name, filters, or is_default |
+| DELETE | `/api/user/filters/[id]` | Required | Delete a filter set |
+| PATCH | `/api/user/filters/[id]/share` | Required | Generate or revoke the share token |
+
+### Public sharing (no auth required)
+| Method | Route | Auth | Action |
+|--------|-------|------|--------|
+| GET | `/api/filters/share/[token]` | None | Return name + filters for a shared token |
+| POST | `/api/user/filters` | Required | Import (copy) a shared filter set to the caller's account |
 
 ---
 
@@ -143,10 +173,7 @@ Users can share a named filter set via a link. The recipient gets an independent
 | Import | Recipient clicks "Add to my filters" → logs in → independent copy saved to their account |
 | Revoke | Sharer sets `share_token` back to NULL |
 
-API routes:
-- `PATCH /api/filters/[id]/share` — generates and stores the token (authenticated)
-- `GET /api/filters/share/[token]` — returns name + filters by token, no auth required (server-side service role)
-- `POST /api/filters` — saves a copy to the current user's account (authenticated)
+See the API routes table above for the full set of endpoints.
 
 ---
 
@@ -180,6 +207,7 @@ Note: Supabase encrypts at the storage level, but a project admin can still read
 | Default filter | Partial unique index | DB enforces one-default-per-user; no application-level bugs possible |
 | `grade_interest` type | `INTEGER[]` | Parents/counselors browse multiple grade levels |
 | Service role in app | Unchanged | API gateway pattern stays; only route handlers touch DB |
+| User data access | Via `/api/*` route handlers | Consistent with ADR-007; browser never reads/writes profiles or filter sets directly to Supabase; route handler validates session and scopes query by `user_id` |
 | Cross-user data visibility | None | No role grants access to another user's data; student controls their own |
 | Roles in app | Student-focused for now | Schema is role-aware (`role` column kept) but app only serves students until course planning (R-004) ships |
 | Filter sharing | Copy-on-import via `share_token` | No live dependencies between users; recipient owns their copy independently |

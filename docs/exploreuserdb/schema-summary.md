@@ -51,6 +51,6 @@ Named snapshots of the filter bar. Many rows per user.
 - `grade_interest` is an array so users browsing multiple grades can store all of them
 - Exactly one default filter set per user enforced by a partial unique index on `(user_id) WHERE is_default = true`
 - `share_token` is globally unique — tokens cannot collide across users
-- Both tables have RLS enabled; users read/write only their own rows — no student can see another student's profile or filter sets
+- Both tables have RLS enabled as a defense-in-depth backstop; the `service_role` key (used by route handlers) bypasses RLS, so the primary access control is the route handler itself
 - Auth is handled by Supabase Auth (`auth.users`); a trigger auto-creates the `profiles` row on signup
-- All DB access goes through server-side API routes (service role key) — the anon key is never used to read profile data directly
+- All user data access goes through server-side `/api/*` route handlers — the browser never reads or writes profile or filter data directly to Supabase; route handlers validate the session via `@supabase/ssr` and scope all queries by `user_id`
