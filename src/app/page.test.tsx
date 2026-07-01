@@ -30,12 +30,13 @@ function okJson(body: unknown) {
   return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
 }
 
-// The app reads only GET /api/courses (course_details is not used — ADR-009).
+// The app reads GET /api/courses and GET /api/auth/me (course_details is not used — ADR-009).
 function installFetch(impl?: (url: string) => Promise<Response>) {
   const fn = vi.fn((input: string | URL) => {
     const url = String(input);
     if (impl) return impl(url);
     if (url === "/api/courses") return okJson(LIST);
+    if (url === "/api/auth/me") return okJson({ email: null });
     return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
   });
   global.fetch = fn as unknown as typeof fetch;
@@ -92,17 +93,23 @@ describe("Home page — loading & data from API", () => {
 });
 
 describe("Home page — glossary", () => {
-  it("renders category glossary on initial load", async () => {
+  it("renders the glossary accordion header on initial load", async () => {
     await renderLoaded();
-    expect(screen.getByText("Course Categories")).toBeInTheDocument();
+    expect(screen.getByText("Course categories & credits guide")).toBeInTheDocument();
   });
 
-  it("can dismiss and restore the glossary", async () => {
+  it("glossary content is collapsed by default", async () => {
     await renderLoaded();
-    fireEvent.click(screen.getByLabelText("Dismiss glossary"));
-    expect(screen.queryByText("Course Categories")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText("Show category guide"));
-    expect(screen.getByText("Course Categories")).toBeInTheDocument();
+    expect(screen.queryByText("Locally Developed")).not.toBeInTheDocument();
+  });
+
+  it("expands and collapses the glossary on toggle", async () => {
+    await renderLoaded();
+    const toggle = screen.getByRole("button", { name: /course categories/i });
+    fireEvent.click(toggle);
+    expect(screen.getByText("Locally Developed")).toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(screen.queryByText("Locally Developed")).not.toBeInTheDocument();
   });
 });
 
@@ -312,7 +319,7 @@ describe("Home page — expand (courses-only, no detail fetch)", () => {
     const fetchFn = await renderLoaded();
     const card = screen.getByText("Mathematics 10").closest("article")!;
     fireEvent.click(within(card).getByRole("button", { name: "Toggle details" }));
-    const detailCalls = fetchFn.mock.calls.filter((c) => String(c[0]) !== "/api/courses");
+    const detailCalls = fetchFn.mock.calls.filter((c) => !(["/api/courses", "/api/auth/me"] as string[]).includes(String(c[0])));
     expect(detailCalls).toHaveLength(0);
   });
 

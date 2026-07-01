@@ -17,9 +17,13 @@ export default async function Header() {
         <nav className="flex items-center gap-4 text-sm">
           {userEmail ? (
             <>
-              <span className="text-[#6B7075] hidden sm:block truncate max-w-[200px]">
-                {userEmail}
-              </span>
+              <a
+                href="/profile"
+                aria-label="Your profile"
+                className="w-8 h-8 rounded-full bg-[#1A1D21] text-white flex items-center justify-center text-sm font-semibold hover:bg-[#3C4043] transition-colors shrink-0"
+              >
+                {userEmail[0].toUpperCase()}
+              </a>
               <form action="/api/auth/logout" method="POST">
                 <button
                   type="submit"
