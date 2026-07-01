@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createAuthClient } from "@/lib/supabase-auth";
 
 export default async function ProfilePage() {
@@ -14,7 +15,7 @@ export default async function ProfilePage() {
     <div className="min-h-[calc(100vh-3rem)] bg-[var(--background)]">
       <div className="max-w-[880px] mx-auto px-4 py-8 sm:py-12">
 
-        <a
+        <Link
           href="/"
           className="inline-flex items-center gap-1.5 text-sm text-[#6B7075] hover:text-[#1A1D21] transition-colors mb-6"
         >
@@ -22,7 +23,7 @@ export default async function ProfilePage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           Back to course search
-        </a>
+        </Link>
 
         <div className="mb-8">
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[#1A1D21]">

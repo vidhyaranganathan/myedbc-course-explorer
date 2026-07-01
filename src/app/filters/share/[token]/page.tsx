@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function SharedFilterPage({ params }: { params: { token: string } }) {
   void params;
 
@@ -31,9 +33,9 @@ export default function SharedFilterPage({ params }: { params: { token: string }
 
         <p className="text-xs text-[#9AA0A6] text-center mt-4">
           Shared via{" "}
-          <a href="/" className="text-[#1A1D21] font-medium hover:underline">
+          <Link href="/" className="text-[#1A1D21] font-medium hover:underline">
             BC Course Finder
-          </a>
+          </Link>
         </p>
 
       </div>
