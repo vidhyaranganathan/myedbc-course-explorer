@@ -1,6 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const PROTECTED_PAGES = ["/profile"];
+const PROTECTED_API_PREFIX = "/api/user";
+
 // @supabase/ssr requires this proxy to refresh the session cookie on every
 // request so it doesn't expire mid-session.
 export async function proxy(request: NextRequest) {
@@ -26,7 +29,20 @@ export async function proxy(request: NextRequest) {
   });
 
   // Refresh session — do not remove this call.
-  await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { pathname } = request.nextUrl;
+
+  if (!user) {
+    if (PROTECTED_PAGES.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = "/login";
+      return NextResponse.redirect(loginUrl);
+    }
+    if (pathname.startsWith(PROTECTED_API_PREFIX)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
 
   return supabaseResponse;
 }
