@@ -31,12 +31,13 @@ function okJson(body: unknown) {
 }
 
 // The app reads GET /api/courses and GET /api/auth/me (course_details is not used — ADR-009).
-function installFetch(impl?: (url: string) => Promise<Response>) {
-  const fn = vi.fn((input: string | URL) => {
+function installFetch(impl?: (url: string, init?: RequestInit) => Promise<Response>) {
+  const fn = vi.fn((input: string | URL, init?: RequestInit) => {
     const url = String(input);
-    if (impl) return impl(url);
+    if (impl) return impl(url, init);
     if (url === "/api/courses") return okJson(LIST);
     if (url === "/api/auth/me") return okJson({ email: null });
+    if (url === "/api/user/filters") return okJson([]);
     return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
   });
   global.fetch = fn as unknown as typeof fetch;
@@ -354,5 +355,102 @@ describe("Home page — expand (courses-only, no detail fetch)", () => {
     const card = screen.getByText("Mathematics 10").closest("article")!;
     fireEvent.click(within(card).getByRole("button", { name: "Toggle details" }));
     expect(within(card).queryByText("Published description")).not.toBeInTheDocument();
+  });
+});
+
+const SAVED_SETS = [
+  {
+    id: "set-1",
+    name: "My Grade 11 Set",
+    isDefault: true,
+    filters: { query: "", grades: ["11"], categories: [], languages: [], subjects: [], credits: [] },
+    createdAt: "t1",
+    updatedAt: "t1",
+  },
+];
+
+async function renderLoggedIn(sets: unknown[] = []) {
+  cleanup();
+  const fetchFn = installFetch((url: string) => {
+    if (url === "/api/courses") return okJson(LIST);
+    if (url === "/api/auth/me") return okJson({ email: "user@example.com" });
+    if (url === "/api/user/filters") return okJson(sets);
+    return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
+  });
+  render(<Home />);
+  await screen.findByText("Mathematics 10");
+  return fetchFn;
+}
+
+describe("Home page — save filters (logged in)", () => {
+  it("shows a login prompt instead of Save filters when logged out", async () => {
+    await renderLoaded();
+    fireEvent.change(screen.getByPlaceholderText("Search by course title, code, or subject..."), {
+      target: { value: "math" },
+    });
+    expect(screen.getByRole("link", { name: /save filters/i })).toHaveAttribute("href", "/login");
+  });
+
+  it("shows an active Save filters button when logged in", async () => {
+    await renderLoggedIn();
+    fireEvent.change(screen.getByPlaceholderText("Search by course title, code, or subject..."), {
+      target: { value: "math" },
+    });
+    expect(screen.getByRole("button", { name: /save filters/i })).toBeInTheDocument();
+  });
+
+  it("opens the popover, enters a name, and saves a new filter set", async () => {
+    const fetchFn = await renderLoggedIn();
+    fireEvent.change(screen.getByPlaceholderText("Search by course title, code, or subject..."), {
+      target: { value: "math" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save filters/i }));
+    fireEvent.change(screen.getByPlaceholderText(/grade 11 science french/i), { target: { value: "My Set" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await screen.findByText("Saved");
+    const postCall = fetchFn.mock.calls.find(
+      (c) => c[0] === "/api/user/filters" && c[1]?.method === "POST"
+    );
+    expect(postCall).toBeTruthy();
+    const body = JSON.parse(postCall![1]!.body as string);
+    expect(body.name).toBe("My Set");
+    expect(body.filters.query).toBe("math");
+    expect(body.isDefault).toBe(false);
+  });
+
+  it("shows an inline error when saving fails", async () => {
+    installFetch((url, init) => {
+      if (url === "/api/courses") return okJson(LIST);
+      if (url === "/api/auth/me") return okJson({ email: "user@example.com" });
+      if (url === "/api/user/filters" && init?.method === "POST") {
+        return Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({ error: "name is required" }) } as Response);
+      }
+      if (url === "/api/user/filters") return okJson([]);
+      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
+    });
+    render(<Home />);
+    await screen.findByText("Mathematics 10");
+    fireEvent.change(screen.getByPlaceholderText("Search by course title, code, or subject..."), {
+      target: { value: "math" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save filters/i }));
+    fireEvent.change(screen.getByPlaceholderText(/grade 11 science french/i), { target: { value: "My Set" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("name is required")).toBeInTheDocument();
+  });
+});
+
+describe("Home page — loading saved filter sets", () => {
+  it("auto-loads the default filter set on mount when logged in", async () => {
+    await renderLoggedIn(SAVED_SETS);
+    expect(screen.getByText("Science 11")).toBeInTheDocument();
+    expect(screen.queryByText("Mathematics 10")).not.toBeInTheDocument();
+  });
+
+  it("does not fetch saved filter sets when logged out", async () => {
+    const fetchFn = await renderLoaded();
+    const filterSetCalls = fetchFn.mock.calls.filter((c) => c[0] === "/api/user/filters");
+    expect(filterSetCalls).toHaveLength(0);
   });
 });
