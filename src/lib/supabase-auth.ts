@@ -27,3 +27,19 @@ export async function createAuthClient() {
     },
   });
 }
+
+/**
+ * Resolves the logged-in user's id + email from the session cookie, or null
+ * if there is no session (or the session read fails). Every /api/user/* route
+ * calls this first to scope its DB queries to the acting user.
+ */
+export async function getSessionUser(): Promise<{ userId: string; email: string | null } | null> {
+  try {
+    const supabase = await createAuthClient();
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) return null;
+    return { userId: data.user.id, email: data.user.email ?? null };
+  } catch {
+    return null;
+  }
+}

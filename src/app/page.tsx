@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import type { CourseListItem } from "@/lib/types";
 import { filterCourses, getFilterOptions, emptyFilters, type Filters } from "@/lib/search";
+import type { SavedFilterSet } from "@/lib/user-types";
 
 const PAGE_SIZE = 50;
 
@@ -29,6 +30,24 @@ export default function Home() {
       .then((d: { email: string | null }) => setUserEmail(d.email ?? null))
       .catch(() => setUserEmail(null));
   }, []);
+
+  useEffect(() => {
+    if (!userEmail) return;
+    let cancelled = false;
+    fetch("/api/user/filters")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((sets: SavedFilterSet[]) => {
+        if (cancelled) return;
+        const params = new URLSearchParams(window.location.search);
+        const loadId = params.get("loadFilterSet");
+        const target = loadId
+          ? sets.find((s) => s.id === loadId)
+          : sets.find((s) => s.isDefault);
+        if (target) setFilters(target.filters);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [userEmail]);
 
   useEffect(() => {
     let cancelled = false;
@@ -222,15 +241,7 @@ export default function Home() {
                   Save filters
                 </a>
               ) : (
-                <button
-                  disabled
-                  className="text-sm font-medium text-[#1A1D21] border border-[#E6E8EB] rounded-lg px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                  </svg>
-                  Save filters
-                </button>
+                <SaveFiltersButton filters={filters} />
               )}
             </div>
           )}
@@ -301,6 +312,112 @@ export default function Home() {
           Data sourced from the BC Ministry of Education
         </div>
       </div>
+    </div>
+  );
+}
+
+function SaveFiltersButton({
+  filters,
+}: {
+  filters: Filters;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [makeDefault, setMakeDefault] = useState(false);
+  const [state, setState] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  async function handleSave() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setState("saving");
+    setError(null);
+    try {
+      const res = await fetch("/api/user/filters", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: trimmed, filters, isDefault: makeDefault }),
+      });
+      if (!res.ok) {
+        const b = await res.json().catch(() => null);
+        throw new Error(b?.error ?? `Failed to save (${res.status})`);
+      }
+      setState("success");
+      setTimeout(() => {
+        setState("idle");
+        setOpen(false);
+        setName("");
+        setMakeDefault(false);
+      }, 1200);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save");
+      setState("error");
+    }
+  }
+
+  const saving = state === "saving";
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="text-sm font-medium text-[#1A1D21] border border-[#E6E8EB] rounded-lg px-3 py-1.5 flex items-center gap-1.5 hover:border-[#C8CBD0] hover:bg-[#F8F9FB] transition-colors"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+        </svg>
+        {state === "success" ? "Saved" : "Save filters"}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 z-20 mt-1 w-72 bg-white border border-[#E6E8EB] rounded-xl shadow-[0_4px_24px_rgba(0,0,0,0.09)] p-4">
+          <label className="block text-xs font-semibold text-[#9AA0A6] uppercase tracking-wide mb-1.5">
+            Name this filter set
+          </label>
+          <input
+            autoFocus
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSave()}
+            disabled={saving}
+            placeholder="e.g. Grade 11 Science French"
+            className="w-full border border-[#E6E8EB] rounded-lg px-3 py-2 text-sm text-[#1A1D21] placeholder-[#C4C9D0] disabled:opacity-60"
+          />
+          <label className="flex items-center gap-2 mt-3 text-sm text-[#1A1D21]">
+            <input
+              type="checkbox"
+              checked={makeDefault}
+              onChange={(e) => setMakeDefault(e.target.checked)}
+              disabled={saving}
+            />
+            Make this my default
+          </label>
+          {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+          <div className="flex items-center gap-2 mt-4">
+            <button
+              onClick={handleSave}
+              disabled={saving || !name.trim()}
+              className="text-sm font-medium text-white bg-[#1A1D21] rounded-lg px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+            <button onClick={() => setOpen(false)} className="text-sm text-[#6B7075] hover:text-[#1A1D21]">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
