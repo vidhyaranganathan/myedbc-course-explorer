@@ -3,10 +3,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 
 vi.mock("@/lib/supabase-server", () => ({ createServerClient: vi.fn() }));
-vi.mock("@/lib/supabase-auth", () => ({ getSessionUser: vi.fn() }));
+vi.mock("@/lib/auth", () => ({ getSessionUser: vi.fn() }));
 
 import { createServerClient } from "@/lib/supabase-server";
-import { getSessionUser } from "@/lib/supabase-auth";
+import { getSessionUser } from "@/lib/auth";
 import { PATCH, DELETE } from "./route";
 
 type Result = { data?: unknown; error: { message: string } | null };

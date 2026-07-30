@@ -40,6 +40,7 @@ myedbc-course-explorer/
 - **Framework**: Next.js 16, React 19, TypeScript 6
 - **Styling**: Tailwind CSS 4
 - **Data**: Supabase Postgres (single source of truth), reached only through the `src/app/api/courses/` route handlers
+- **Auth**: Clerk (email + social login) — see ADR-010
 - **Deployment**: Vercel (single project)
 
 ## Commands

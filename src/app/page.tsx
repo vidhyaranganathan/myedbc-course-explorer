@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
+import Link from "next/link";
 import type { CourseListItem } from "@/lib/types";
 import { filterCourses, getFilterOptions, emptyFilters, type Filters } from "@/lib/search";
 import type { SavedFilterSet } from "@/lib/user-types";
@@ -231,7 +232,7 @@ export default function Home() {
                 Clear all filters
               </button>
               {userEmail === null ? (
-                <a
+                <Link
                   href="/login"
                   className="text-sm font-medium text-[#1A1D21] border border-[#E6E8EB] rounded-lg px-3 py-1.5 flex items-center gap-1.5 hover:border-[#C8CBD0] hover:bg-[#F8F9FB] transition-colors"
                 >
@@ -239,7 +240,7 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                   </svg>
                   Save filters
-                </a>
+                </Link>
               ) : (
                 <SaveFiltersButton filters={filters} />
               )}

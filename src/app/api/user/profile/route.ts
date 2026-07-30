@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/supabase-auth";
+import { getSessionUser } from "@/lib/auth";
 import { createServerClient } from "@/lib/supabase-server";
 import { PROFILE_COLUMNS, toProfile } from "@/lib/user-mapper";
 import { PROFILE_ROLES, VALID_GRADES, type Profile } from "@/lib/user-types";

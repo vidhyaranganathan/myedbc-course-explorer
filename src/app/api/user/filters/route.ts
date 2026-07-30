@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/supabase-auth";
+import { getSessionUser } from "@/lib/auth";
 import { createServerClient } from "@/lib/supabase-server";
 import { FILTER_SET_COLUMNS, toSavedFilterSet } from "@/lib/user-mapper";
 import type { Filters } from "@/lib/search";

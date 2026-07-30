@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getSessionUser } from "@/lib/supabase-auth";
+import { getSessionUser } from "@/lib/auth";
 import { createServerClient } from "@/lib/supabase-server";
 import { PROFILE_COLUMNS, FILTER_SET_COLUMNS, toProfile, toSavedFilterSet } from "@/lib/user-mapper";
 import type { Profile, SavedFilterSet } from "@/lib/user-types";
