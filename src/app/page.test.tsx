@@ -444,7 +444,7 @@ describe("Home page — save filters (logged in)", () => {
 describe("Home page — loading saved filter sets", () => {
   it("auto-loads the default filter set on mount when logged in", async () => {
     await renderLoggedIn(SAVED_SETS);
-    expect(screen.getByText("Science 11")).toBeInTheDocument();
+    expect(await screen.findByText("Science 11")).toBeInTheDocument();
     expect(screen.queryByText("Mathematics 10")).not.toBeInTheDocument();
   });
 
