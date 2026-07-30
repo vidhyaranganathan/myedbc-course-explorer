@@ -44,8 +44,8 @@
         "matcher": "Edit|Write",
         "hooks": [
           {
-            "type": "prompt",
-            "prompt": "You are an architecture drift detector. Check if this code change violates any existing Architecture Decision Records.\n\nThe tool input is: $ARGUMENTS\n\nRead ALL files in docs/decisions/ (skip template.md). For each ADR, understand the decision that was made, then check if the proposed code change contradicts it. Think about what kind of code changes would violate each decision.\n\nIf no violation is detected, respond with exactly: PASS\nIf a violation is detected, respond with: WARN: [which ADR] - [what the violation is]. This change may be intentional — consider updating the ADR if the decision has changed.",
+            "type": "agent",
+            "prompt": "You are an architecture drift detector. Check if this code change violates any existing Architecture Decision Records.\n\nThe tool input is: $ARGUMENTS\n\nUse your Read tool to actually read ALL files in docs/decisions/ (skip template.md) before judging — do not guess or invent ADR content. For each ADR, understand the decision that was made, then check if the proposed code change contradicts it. Think about what kind of code changes would violate each decision.\n\nIf no violation is detected, respond with exactly: PASS\nIf a violation is detected, respond with: WARN: [which ADR] - [what the violation is]. This change may be intentional — consider updating the ADR if the decision has changed.",
             "model": "claude-haiku-4-5-20251001"
           }
         ]
