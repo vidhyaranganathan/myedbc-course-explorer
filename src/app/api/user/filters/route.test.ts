@@ -3,10 +3,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 
 vi.mock("@/lib/supabase-server", () => ({ createServerClient: vi.fn() }));
-vi.mock("@/lib/auth", () => ({ getSessionUser: vi.fn() }));
+vi.mock("@/lib/auth", () => ({ getSessionUserId: vi.fn() }));
 
 import { createServerClient } from "@/lib/supabase-server";
-import { getSessionUser } from "@/lib/auth";
+import { getSessionUserId } from "@/lib/auth";
 import { GET, POST } from "./route";
 
 type Result = { data?: unknown; error: { message: string } | null };
@@ -60,13 +60,13 @@ afterEach(() => vi.clearAllMocks());
 
 describe("GET /api/user/filters", () => {
   it("returns 401 when logged out", async () => {
-    vi.mocked(getSessionUser).mockResolvedValue(null);
+    vi.mocked(getSessionUserId).mockResolvedValue(null);
     const res = await GET();
     expect(res.status).toBe(401);
   });
 
   it("returns the list mapped to camelCase", async () => {
-    vi.mocked(getSessionUser).mockResolvedValue({ userId: "u1", email: "a@b.com" });
+    vi.mocked(getSessionUserId).mockResolvedValue("u1");
     setClient({
       data: [
         { id: "1", name: "Set A", is_default: true, filters: validFilters, created_at: "t1", updated_at: "t1" },
@@ -81,7 +81,7 @@ describe("GET /api/user/filters", () => {
   });
 
   it("returns an empty array when there are no saved sets", async () => {
-    vi.mocked(getSessionUser).mockResolvedValue({ userId: "u1", email: "a@b.com" });
+    vi.mocked(getSessionUserId).mockResolvedValue("u1");
     setClient({ data: [], error: null });
     const res = await GET();
     expect(res.status).toBe(200);
@@ -89,7 +89,7 @@ describe("GET /api/user/filters", () => {
   });
 
   it("returns a generic 500 when the DB errors", async () => {
-    vi.mocked(getSessionUser).mockResolvedValue({ userId: "u1", email: "a@b.com" });
+    vi.mocked(getSessionUserId).mockResolvedValue("u1");
     setClient({ data: null, error: { message: "boom" } });
     const res = await GET();
     expect(res.status).toBe(500);
@@ -98,37 +98,37 @@ describe("GET /api/user/filters", () => {
 
 describe("POST /api/user/filters", () => {
   it("returns 401 when logged out", async () => {
-    vi.mocked(getSessionUser).mockResolvedValue(null);
+    vi.mocked(getSessionUserId).mockResolvedValue(null);
     const res = await POST(postReq({ name: "X", filters: validFilters }));
     expect(res.status).toBe(401);
   });
 
   it("returns 400 on invalid JSON", async () => {
-    vi.mocked(getSessionUser).mockResolvedValue({ userId: "u1", email: "a@b.com" });
+    vi.mocked(getSessionUserId).mockResolvedValue("u1");
     const res = await POST(postReq("not json"));
     expect(res.status).toBe(400);
   });
 
   it("returns 400 when name is missing", async () => {
-    vi.mocked(getSessionUser).mockResolvedValue({ userId: "u1", email: "a@b.com" });
+    vi.mocked(getSessionUserId).mockResolvedValue("u1");
     const res = await POST(postReq({ filters: validFilters }));
     expect(res.status).toBe(400);
   });
 
   it("returns 400 when name is empty after trim", async () => {
-    vi.mocked(getSessionUser).mockResolvedValue({ userId: "u1", email: "a@b.com" });
+    vi.mocked(getSessionUserId).mockResolvedValue("u1");
     const res = await POST(postReq({ name: "   ", filters: validFilters }));
     expect(res.status).toBe(400);
   });
 
   it("returns 400 when filters is malformed", async () => {
-    vi.mocked(getSessionUser).mockResolvedValue({ userId: "u1", email: "a@b.com" });
+    vi.mocked(getSessionUserId).mockResolvedValue("u1");
     const res = await POST(postReq({ name: "X", filters: { query: "" } }));
     expect(res.status).toBe(400);
   });
 
   it("creates a non-default set without clearing any existing default", async () => {
-    vi.mocked(getSessionUser).mockResolvedValue({ userId: "u1", email: "a@b.com" });
+    vi.mocked(getSessionUserId).mockResolvedValue("u1");
     const updateCalls: UpdateCall[] = [];
     setClient(
       { data: null, error: null },
@@ -142,7 +142,7 @@ describe("POST /api/user/filters", () => {
   });
 
   it("clears the old default before inserting when isDefault is true", async () => {
-    vi.mocked(getSessionUser).mockResolvedValue({ userId: "u1", email: "a@b.com" });
+    vi.mocked(getSessionUserId).mockResolvedValue("u1");
     const updateCalls: UpdateCall[] = [];
     setClient(
       { data: null, error: null },
@@ -156,7 +156,7 @@ describe("POST /api/user/filters", () => {
   });
 
   it("returns 409 on a unique-violation race for the default index", async () => {
-    vi.mocked(getSessionUser).mockResolvedValue({ userId: "u1", email: "a@b.com" });
+    vi.mocked(getSessionUserId).mockResolvedValue("u1");
     setClient(
       { data: null, error: null },
       { data: null, error: { message: 'duplicate key value violates unique constraint "one_default_per_user"' } }
@@ -166,7 +166,7 @@ describe("POST /api/user/filters", () => {
   });
 
   it("returns a generic 500 on other insert errors", async () => {
-    vi.mocked(getSessionUser).mockResolvedValue({ userId: "u1", email: "a@b.com" });
+    vi.mocked(getSessionUserId).mockResolvedValue("u1");
     setClient({ data: null, error: null }, { data: null, error: { message: "boom" } });
     const res = await POST(postReq({ name: "Y", filters: validFilters }));
     expect(res.status).toBe(500);

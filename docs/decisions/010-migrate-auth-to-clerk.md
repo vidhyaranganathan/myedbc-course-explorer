@@ -2,6 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-07-30
+**Updated**: 2026-08-13
 
 ## Context
 
@@ -15,7 +16,8 @@ Replace Supabase Auth with Clerk for identity. Postgres stays on Supabase, acces
 
 - **UI**: Clerk's prebuilt `<SignIn>`/`<SignUp>` components (catch-all routes at `/login/[[...rest]]`, `/signup/[[...rest]]`), themed via Clerk's `appearance` prop. Social providers are enabled in the Clerk Dashboard with no bespoke OAuth code.
 - **Session/middleware**: `clerkMiddleware()` in `src/proxy.ts` replaces the manual `@supabase/ssr` cookie-refresh logic, preserving the same route-protection behavior (`/profile` redirects to `/login`; `/api/user/*` returns 401 JSON).
-- **Server-side session read**: `src/lib/auth.ts` (renamed from `supabase-auth.ts`) exposes `getSessionUser()` backed by Clerk's `currentUser()`, same `{ userId, email } | null` shape as before — every `/api/user/*` route and `profile/page.tsx` only change their import, not their logic.
+- **Server-side session read**: `src/lib/auth.ts` (renamed from `supabase-auth.ts`) exposes `getSessionUser()` backed by Clerk's `currentUser()`, same `{ userId, email } | null` shape as before.
+  - **2026-08-13 update**: `currentUser()` makes a Clerk Backend API round-trip, which was landing on every request through `Header` and every `/api/user/*` route even though those routes only ever use `.userId`. Added `getSessionUserId()`, backed by Clerk's `auth()` (reads the session JWT locally, no network call), and switched the three `/api/user/*` routes to it. `getSessionUser()` stays in place for `Header`, `/api/auth/me`, and `profile/page.tsx`, which render the email. Caught in review on PR #18 (Vidhya).
 - **Schema**: `profiles.id` and `saved_filter_sets.user_id` change from `UUID REFERENCES auth.users(id)` to plain `TEXT` (Clerk ids are strings like `user_2abc...`, and there is no `auth.users` table to reference once Clerk owns identity). The `handle_new_user()` trigger on `auth.users` insert is dropped — there's no equivalent Postgres-level signup hook under Clerk.
 - **Profile bootstrap**: no Clerk webhook. The existing self-healing upsert in `PATCH /api/user/profile` (previously a fallback for a trigger-created row) becomes the only creation path — a profile row is created lazily on first save. Simpler, and sufficient since there's no feature today that requires a profile row to exist before first edit.
 - **RLS**: `profiles`/`saved_filter_sets` RLS policies keyed on `auth.uid()` are left in place, unchanged. They were already inert for the app's own access — every route handler uses the service-role client, which bypasses RLS, and `user_id` scoping in the route handler was always the real enforcement (see `docs/exploreuserdb/`). After this migration nothing ever authenticates as a Supabase session at all, so these policies become fully decorative defense-in-depth against the now-unused anon key rather than an active boundary. Not worth the schema churn to remove.

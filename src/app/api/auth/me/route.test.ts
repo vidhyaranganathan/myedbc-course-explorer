@@ -15,15 +15,21 @@ const { NextResponse } = await import("next/server");
 describe("GET /api/auth/me", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("returns user email when authenticated", async () => {
+  it("returns user email and isSignedIn true when authenticated", async () => {
     mockGetSessionUser.mockResolvedValue({ userId: "u1", email: "test@example.com" });
     await GET();
-    expect(NextResponse.json).toHaveBeenCalledWith({ email: "test@example.com" });
+    expect(NextResponse.json).toHaveBeenCalledWith({ email: "test@example.com", isSignedIn: true });
   });
 
-  it("returns null when no user session", async () => {
+  it("returns null email and isSignedIn false when no user session", async () => {
     mockGetSessionUser.mockResolvedValue(null);
     await GET();
-    expect(NextResponse.json).toHaveBeenCalledWith({ email: null });
+    expect(NextResponse.json).toHaveBeenCalledWith({ email: null, isSignedIn: false });
+  });
+
+  it("returns isSignedIn true even when the session has no primary email", async () => {
+    mockGetSessionUser.mockResolvedValue({ userId: "u1", email: null });
+    await GET();
+    expect(NextResponse.json).toHaveBeenCalledWith({ email: null, isSignedIn: true });
   });
 });

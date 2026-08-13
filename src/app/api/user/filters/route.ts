@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth";
+import { getSessionUserId } from "@/lib/auth";
 import { createServerClient } from "@/lib/supabase-server";
 import { FILTER_SET_COLUMNS, toSavedFilterSet } from "@/lib/user-mapper";
 import type { Filters } from "@/lib/search";
@@ -22,15 +22,15 @@ function isValidFilters(v: unknown): v is Filters {
 
 /** GET /api/user/filters — list the logged-in user's saved filter sets, default first. */
 export async function GET() {
-  const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   try {
     const supabase = createServerClient();
     const { data, error } = await supabase
       .from("saved_filter_sets")
       .select(FILTER_SET_COLUMNS)
-      .eq("user_id", user.userId)
+      .eq("user_id", userId)
       .order("is_default", { ascending: false })
       .order("created_at", { ascending: false });
     if (error) return serverError("GET", error);
@@ -42,8 +42,8 @@ export async function GET() {
 
 /** POST /api/user/filters — create a new saved filter set. */
 export async function POST(request: NextRequest) {
-  const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   let body: unknown;
   try {
@@ -68,14 +68,14 @@ export async function POST(request: NextRequest) {
       const { error: clearError } = await supabase
         .from("saved_filter_sets")
         .update({ is_default: false })
-        .eq("user_id", user.userId)
+        .eq("user_id", userId)
         .eq("is_default", true);
       if (clearError) return serverError("POST clear old default", clearError);
     }
 
     const { data, error } = await supabase
       .from("saved_filter_sets")
-      .insert({ user_id: user.userId, name, filters: b.filters, is_default: isDefault })
+      .insert({ user_id: userId, name, filters: b.filters, is_default: isDefault })
       .select(FILTER_SET_COLUMNS)
       .single();
     if (error) {

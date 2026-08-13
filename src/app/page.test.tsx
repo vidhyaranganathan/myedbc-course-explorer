@@ -36,7 +36,7 @@ function installFetch(impl?: (url: string, init?: RequestInit) => Promise<Respon
     const url = String(input);
     if (impl) return impl(url, init);
     if (url === "/api/courses") return okJson(LIST);
-    if (url === "/api/auth/me") return okJson({ email: null });
+    if (url === "/api/auth/me") return okJson({ email: null, isSignedIn: false });
     if (url === "/api/user/filters") return okJson([]);
     return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
   });
@@ -373,7 +373,7 @@ async function renderLoggedIn(sets: unknown[] = []) {
   cleanup();
   const fetchFn = installFetch((url: string) => {
     if (url === "/api/courses") return okJson(LIST);
-    if (url === "/api/auth/me") return okJson({ email: "user@example.com" });
+    if (url === "/api/auth/me") return okJson({ email: "user@example.com", isSignedIn: true });
     if (url === "/api/user/filters") return okJson(sets);
     return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
   });
@@ -422,7 +422,7 @@ describe("Home page — save filters (logged in)", () => {
   it("shows an inline error when saving fails", async () => {
     installFetch((url, init) => {
       if (url === "/api/courses") return okJson(LIST);
-      if (url === "/api/auth/me") return okJson({ email: "user@example.com" });
+      if (url === "/api/auth/me") return okJson({ email: "user@example.com", isSignedIn: true });
       if (url === "/api/user/filters" && init?.method === "POST") {
         return Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({ error: "name is required" }) } as Response);
       }
