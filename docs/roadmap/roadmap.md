@@ -23,6 +23,8 @@ BC Course Finder is a functional single-page app with search and filtering acros
 | R-005 | Mobile optimization | Responsive design improvements for smaller screens | Unassigned | Planned |
 | R-010 | LLM chat interface | Natural language chat to explore course data — "what math courses are available in grade 11?", "which courses count toward graduation?", course recommendations based on interests | Unassigned | Planned |
 | R-012 | Self-serve account deletion | Delete-account button in profile UI → API route → Clerk `deleteUser`. Blocked on TD-019 (Clerk `user.deleted` webhook needed first, so `profiles`/`saved_filter_sets` rows don't orphan) | Unassigned | Planned |
+| R-013 | User accounts and saved filter sets | Done (2026-08-17): auth migrated from Supabase Auth to Clerk (ADR-010, PR #18); saved filter sets — save, load, rename, set as default, delete (PR #14-16); UX polish — active-filter-set "Viewing: X" indicator with a Default tag, and a duplicate-set merge-on-save prompt (rename existing vs. save as new, never a silent overwrite). Filter *sharing* (`share_token`, public share links) is not yet built — see R-014 | Unassigned | Done |
+| R-014 | Filter set sharing | Generate/revoke a share token for a saved filter set (`PATCH /api/user/filters/[id]/share`) and a public read-only view (`GET /api/filters/share/[token]`, `/filters/share/[token]` page shell already exists from PR #15). Depends on R-013 (shipped) | Unassigned | Planned |
 
 ## Long-Term
 

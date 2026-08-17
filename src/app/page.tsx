@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import type { CourseListItem } from "@/lib/types";
-import { filterCourses, getFilterOptions, emptyFilters, type Filters } from "@/lib/search";
+import { filterCourses, getFilterOptions, filtersEqual, emptyFilters, type Filters } from "@/lib/search";
 import type { SavedFilterSet } from "@/lib/user-types";
 
 const PAGE_SIZE = 50;
@@ -24,6 +24,7 @@ export default function Home() {
   const [showGlossary, setShowGlossary] = useState(false);
   // undefined = loading
   const [isSignedIn, setIsSignedIn] = useState<boolean | undefined>(undefined);
+  const [savedSets, setSavedSets] = useState<SavedFilterSet[]>([]);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -39,6 +40,7 @@ export default function Home() {
       .then((r) => (r.ok ? r.json() : []))
       .then((sets: SavedFilterSet[]) => {
         if (cancelled) return;
+        setSavedSets(sets);
         const params = new URLSearchParams(window.location.search);
         const loadId = params.get("loadFilterSet");
         const target = loadId
@@ -79,6 +81,20 @@ export default function Home() {
   const results = useMemo(() => filterCourses(courses ?? [], filters), [courses, filters]);
   const paged = useMemo(() => results.slice(0, (page + 1) * PAGE_SIZE), [results, page]);
   const hasMore = paged.length < results.length;
+  const activeSet = useMemo(
+    () => savedSets.find((s) => filtersEqual(s.filters, filters)) ?? null,
+    [savedSets, filters]
+  );
+
+  function upsertSavedSet(set: SavedFilterSet) {
+    setSavedSets((cur) => {
+      const idx = cur.findIndex((s) => s.id === set.id);
+      if (idx === -1) return [...cur, set];
+      const next = [...cur];
+      next[idx] = set;
+      return next;
+    });
+  }
 
   function updateQuery(value: string) {
     setFilters((f) => ({ ...f, query: value }));
@@ -231,19 +247,34 @@ export default function Home() {
                 </svg>
                 Clear all filters
               </button>
-              {isSignedIn ? (
-                <SaveFiltersButton filters={filters} />
-              ) : (
-                <Link
-                  href="/login"
-                  className="text-sm font-medium text-[#1A1D21] border border-[#E6E8EB] rounded-lg px-3 py-1.5 flex items-center gap-1.5 hover:border-[#C8CBD0] hover:bg-[#F8F9FB] transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                  </svg>
-                  Save filters
-                </Link>
-              )}
+              <div className="flex items-center gap-2">
+                {activeSet && (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                    </svg>
+                    <span>Viewing: {activeSet.name}</span>
+                    {activeSet.isDefault && (
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-blue-500 border-l border-blue-200 pl-1.5 ml-0.5">
+                        Default
+                      </span>
+                    )}
+                  </span>
+                )}
+                {isSignedIn ? (
+                  <SaveFiltersButton filters={filters} existingSets={savedSets} onSaved={upsertSavedSet} />
+                ) : (
+                  <Link
+                    href="/login"
+                    className="text-sm font-medium text-[#1A1D21] border border-[#E6E8EB] rounded-lg px-3 py-1.5 flex items-center gap-1.5 hover:border-[#C8CBD0] hover:bg-[#F8F9FB] transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                    </svg>
+                    Save filters
+                  </Link>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -319,14 +350,19 @@ export default function Home() {
 
 function SaveFiltersButton({
   filters,
+  existingSets,
+  onSaved,
 }: {
   filters: Filters;
+  existingSets: SavedFilterSet[];
+  onSaved: (set: SavedFilterSet) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [makeDefault, setMakeDefault] = useState(false);
-  const [state, setState] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [state, setState] = useState<"idle" | "confirm-duplicate" | "saving" | "success" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [duplicate, setDuplicate] = useState<SavedFilterSet | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -338,9 +374,16 @@ function SaveFiltersButton({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  async function handleSave() {
+  function resetPanel() {
+    setState("idle");
+    setOpen(false);
+    setName("");
+    setMakeDefault(false);
+    setDuplicate(null);
+  }
+
+  async function saveAsNew() {
     const trimmed = name.trim();
-    if (!trimmed) return;
     setState("saving");
     setError(null);
     try {
@@ -353,20 +396,52 @@ function SaveFiltersButton({
         const b = await res.json().catch(() => null);
         throw new Error(b?.error ?? `Failed to save (${res.status})`);
       }
+      onSaved((await res.json()) as SavedFilterSet);
       setState("success");
-      setTimeout(() => {
-        setState("idle");
-        setOpen(false);
-        setName("");
-        setMakeDefault(false);
-      }, 1200);
+      setTimeout(resetPanel, 1200);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save");
       setState("error");
     }
   }
 
+  async function renameExisting(target: SavedFilterSet) {
+    const trimmed = name.trim();
+    setState("saving");
+    setError(null);
+    try {
+      const res = await fetch(`/api/user/filters/${target.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: trimmed, isDefault: makeDefault }),
+      });
+      if (!res.ok) {
+        const b = await res.json().catch(() => null);
+        throw new Error(b?.error ?? `Failed to save (${res.status})`);
+      }
+      onSaved((await res.json()) as SavedFilterSet);
+      setState("success");
+      setTimeout(resetPanel, 1200);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save");
+      setState("error");
+    }
+  }
+
+  function handleSaveClick() {
+    if (!name.trim()) return;
+    const dup = existingSets.find((s) => filtersEqual(s.filters, filters));
+    if (dup) {
+      setDuplicate(dup);
+      setMakeDefault(dup.isDefault);
+      setState("confirm-duplicate");
+      return;
+    }
+    void saveAsNew();
+  }
+
   const saving = state === "saving";
+  const confirmingDuplicate = state === "confirm-duplicate" && duplicate;
 
   return (
     <div ref={ref} className="relative">
@@ -382,41 +457,85 @@ function SaveFiltersButton({
 
       {open && (
         <div className="absolute right-0 z-20 mt-1 w-72 bg-white border border-[#E6E8EB] rounded-xl shadow-[0_4px_24px_rgba(0,0,0,0.09)] p-4">
-          <label className="block text-xs font-semibold text-[#9AA0A6] uppercase tracking-wide mb-1.5">
-            Name this filter set
-          </label>
-          <input
-            autoFocus
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSave()}
-            disabled={saving}
-            placeholder="e.g. Grade 11 Science French"
-            className="w-full border border-[#E6E8EB] rounded-lg px-3 py-2 text-sm text-[#1A1D21] placeholder-[#C4C9D0] disabled:opacity-60"
-          />
-          <label className="flex items-center gap-2 mt-3 text-sm text-[#1A1D21]">
-            <input
-              type="checkbox"
-              checked={makeDefault}
-              onChange={(e) => setMakeDefault(e.target.checked)}
-              disabled={saving}
-            />
-            Make this my default
-          </label>
-          {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
-          <div className="flex items-center gap-2 mt-4">
-            <button
-              onClick={handleSave}
-              disabled={saving || !name.trim()}
-              className="text-sm font-medium text-white bg-[#1A1D21] rounded-lg px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? "Saving…" : "Save"}
-            </button>
-            <button onClick={() => setOpen(false)} className="text-sm text-[#6B7075] hover:text-[#1A1D21]">
-              Cancel
-            </button>
-          </div>
+          {confirmingDuplicate ? (
+            <>
+              <p className="text-sm text-[#1A1D21]">
+                This matches your saved filter <strong>&ldquo;{duplicate.name}&rdquo;</strong> — rename it to
+                &ldquo;{name.trim()}&rdquo;?
+              </p>
+              <label className="flex items-center gap-2 mt-3 text-sm text-[#1A1D21]">
+                <input
+                  type="checkbox"
+                  checked={makeDefault}
+                  onChange={(e) => setMakeDefault(e.target.checked)}
+                  disabled={saving}
+                />
+                {duplicate.isDefault ? "Keep this as my default filter set" : "Make this my default"}
+              </label>
+              {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+              <div className="flex items-center gap-2 mt-4 flex-wrap">
+                <button
+                  onClick={() => renameExisting(duplicate)}
+                  disabled={saving}
+                  className="text-sm font-medium text-white bg-[#1A1D21] rounded-lg px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {saving ? "Saving…" : "Rename existing"}
+                </button>
+                <button
+                  onClick={() => void saveAsNew()}
+                  disabled={saving}
+                  className="text-sm font-medium text-[#1A1D21] border border-[#E6E8EB] rounded-lg px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Save as new
+                </button>
+                <button
+                  onClick={() => { setState("idle"); setDuplicate(null); }}
+                  disabled={saving}
+                  className="text-sm text-[#6B7075] hover:text-[#1A1D21]"
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <label className="block text-xs font-semibold text-[#9AA0A6] uppercase tracking-wide mb-1.5">
+                Name this filter set
+              </label>
+              <input
+                autoFocus
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSaveClick()}
+                disabled={saving}
+                placeholder="e.g. Grade 11 Science French"
+                className="w-full border border-[#E6E8EB] rounded-lg px-3 py-2 text-sm text-[#1A1D21] placeholder-[#C4C9D0] disabled:opacity-60"
+              />
+              <label className="flex items-center gap-2 mt-3 text-sm text-[#1A1D21]">
+                <input
+                  type="checkbox"
+                  checked={makeDefault}
+                  onChange={(e) => setMakeDefault(e.target.checked)}
+                  disabled={saving}
+                />
+                Make this my default
+              </label>
+              {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+              <div className="flex items-center gap-2 mt-4">
+                <button
+                  onClick={handleSaveClick}
+                  disabled={saving || !name.trim()}
+                  className="text-sm font-medium text-white bg-[#1A1D21] rounded-lg px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {saving ? "Saving…" : "Save"}
+                </button>
+                <button onClick={() => setOpen(false)} className="text-sm text-[#6B7075] hover:text-[#1A1D21]">
+                  Cancel
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

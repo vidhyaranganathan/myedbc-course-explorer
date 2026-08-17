@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { filterCourses, getFilterOptions, emptyFilters, type Filters } from "./search";
+import { filterCourses, getFilterOptions, filtersEqual, emptyFilters, type Filters } from "./search";
 
 interface TestCourse {
   code: string;
@@ -197,5 +197,35 @@ describe("emptyFilters", () => {
     expect(Object.keys(emptyFilters).sort()).toEqual(
       ["categories", "credits", "grades", "languages", "query", "subjects"]
     );
+  });
+});
+
+describe("filtersEqual", () => {
+  it("is true for two empty filters", () => {
+    expect(filtersEqual(emptyFilters, emptyFilters)).toBe(true);
+  });
+
+  it("is true when array values match regardless of order", () => {
+    const a: Filters = { ...emptyFilters, grades: ["10", "11"] };
+    const b: Filters = { ...emptyFilters, grades: ["11", "10"] };
+    expect(filtersEqual(a, b)).toBe(true);
+  });
+
+  it("is false when the query text differs", () => {
+    const a: Filters = { ...emptyFilters, query: "math" };
+    const b: Filters = { ...emptyFilters, query: "science" };
+    expect(filtersEqual(a, b)).toBe(false);
+  });
+
+  it("is false when array lengths differ", () => {
+    const a: Filters = { ...emptyFilters, grades: ["10"] };
+    const b: Filters = { ...emptyFilters, grades: ["10", "11"] };
+    expect(filtersEqual(a, b)).toBe(false);
+  });
+
+  it("is false when array values differ despite matching lengths", () => {
+    const a: Filters = { ...emptyFilters, subjects: ["Mathematics"] };
+    const b: Filters = { ...emptyFilters, subjects: ["Sciences"] };
+    expect(filtersEqual(a, b)).toBe(false);
   });
 });

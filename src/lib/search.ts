@@ -16,6 +16,19 @@ export const emptyFilters: Filters = {
   credits: [],
 };
 
+/** True when two Filters select the same values, ignoring array order. */
+export function filtersEqual(a: Filters, b: Filters): boolean {
+  const sameSet = (x: string[], y: string[]) => x.length === y.length && x.every((v) => y.includes(v));
+  return (
+    a.query === b.query &&
+    sameSet(a.grades, b.grades) &&
+    sameSet(a.categories, b.categories) &&
+    sameSet(a.languages, b.languages) &&
+    sameSet(a.subjects, b.subjects) &&
+    sameSet(a.credits, b.credits)
+  );
+}
+
 interface Searchable {
   code: string;
   grade: string;
