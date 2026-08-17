@@ -22,6 +22,7 @@ BC Course Finder is a functional single-page app with search and filtering acros
 | R-004 | Graduation planning | Help students see which courses satisfy grad requirements | Unassigned | Planned |
 | R-005 | Mobile optimization | Responsive design improvements for smaller screens | Unassigned | Planned |
 | R-010 | LLM chat interface | Natural language chat to explore course data — "what math courses are available in grade 11?", "which courses count toward graduation?", course recommendations based on interests | Unassigned | Planned |
+| R-012 | Self-serve account deletion | Delete-account button in profile UI → API route → Clerk `deleteUser`. Blocked on TD-019 (Clerk `user.deleted` webhook needed first, so `profiles`/`saved_filter_sets` rows don't orphan) | Unassigned | Planned |
 
 ## Long-Term
 

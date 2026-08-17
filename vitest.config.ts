@@ -11,7 +11,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "text-summary", "html"],
-      include: ["src/lib/**", "src/app/**"],
+      include: ["src/lib/**", "src/app/**", "src/components/**"],
       exclude: ["src/__tests__/**"],
       thresholds: {
         statements: 75,

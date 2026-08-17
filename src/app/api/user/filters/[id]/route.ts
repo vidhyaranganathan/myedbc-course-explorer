@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/supabase-auth";
+import { getSessionUserId } from "@/lib/auth";
 import { createServerClient } from "@/lib/supabase-server";
 import { FILTER_SET_COLUMNS, toSavedFilterSet } from "@/lib/user-mapper";
 import type { Filters } from "@/lib/search";
@@ -26,8 +26,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   let body: unknown;
   try {
@@ -62,7 +62,7 @@ export async function PATCH(
       .from("saved_filter_sets")
       .select("id")
       .eq("id", id)
-      .eq("user_id", user.userId)
+      .eq("user_id", userId)
       .maybeSingle();
     if (existingError) return serverError("PATCH ownership check", existingError);
     if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -71,7 +71,7 @@ export async function PATCH(
       const { error: clearError } = await supabase
         .from("saved_filter_sets")
         .update({ is_default: false })
-        .eq("user_id", user.userId)
+        .eq("user_id", userId)
         .eq("is_default", true);
       if (clearError) return serverError("PATCH clear old default", clearError);
     }
@@ -80,7 +80,7 @@ export async function PATCH(
       .from("saved_filter_sets")
       .update(patch)
       .eq("id", id)
-      .eq("user_id", user.userId)
+      .eq("user_id", userId)
       .select(FILTER_SET_COLUMNS)
       .single();
     if (error) {
@@ -101,8 +101,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   try {
     const supabase = createServerClient();
@@ -110,7 +110,7 @@ export async function DELETE(
       .from("saved_filter_sets")
       .delete()
       .eq("id", id)
-      .eq("user_id", user.userId)
+      .eq("user_id", userId)
       .select("id")
       .maybeSingle();
     if (error) return serverError("DELETE", error);

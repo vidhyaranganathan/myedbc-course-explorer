@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
+import Link from "next/link";
 import type { CourseListItem } from "@/lib/types";
 import { filterCourses, getFilterOptions, emptyFilters, type Filters } from "@/lib/search";
 import type { SavedFilterSet } from "@/lib/user-types";
@@ -21,18 +22,18 @@ export default function Home() {
   const [page, setPage] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showGlossary, setShowGlossary] = useState(false);
-  // undefined = loading, null = logged out, string = logged in
-  const [userEmail, setUserEmail] = useState<string | null | undefined>(undefined);
+  // undefined = loading
+  const [isSignedIn, setIsSignedIn] = useState<boolean | undefined>(undefined);
 
   useEffect(() => {
     fetch("/api/auth/me")
       .then((r) => r.json())
-      .then((d: { email: string | null }) => setUserEmail(d.email ?? null))
-      .catch(() => setUserEmail(null));
+      .then((d: { isSignedIn: boolean }) => setIsSignedIn(d.isSignedIn))
+      .catch(() => setIsSignedIn(false));
   }, []);
 
   useEffect(() => {
-    if (!userEmail) return;
+    if (!isSignedIn) return;
     let cancelled = false;
     fetch("/api/user/filters")
       .then((r) => (r.ok ? r.json() : []))
@@ -47,7 +48,7 @@ export default function Home() {
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [userEmail]);
+  }, [isSignedIn]);
 
   useEffect(() => {
     let cancelled = false;
@@ -230,8 +231,10 @@ export default function Home() {
                 </svg>
                 Clear all filters
               </button>
-              {userEmail === null ? (
-                <a
+              {isSignedIn ? (
+                <SaveFiltersButton filters={filters} />
+              ) : (
+                <Link
                   href="/login"
                   className="text-sm font-medium text-[#1A1D21] border border-[#E6E8EB] rounded-lg px-3 py-1.5 flex items-center gap-1.5 hover:border-[#C8CBD0] hover:bg-[#F8F9FB] transition-colors"
                 >
@@ -239,9 +242,7 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                   </svg>
                   Save filters
-                </a>
-              ) : (
-                <SaveFiltersButton filters={filters} />
+                </Link>
               )}
             </div>
           )}

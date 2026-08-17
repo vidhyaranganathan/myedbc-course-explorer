@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/supabase-auth";
+import { getSessionUserId } from "@/lib/auth";
 import { createServerClient } from "@/lib/supabase-server";
 import { PROFILE_COLUMNS, toProfile } from "@/lib/user-mapper";
 import { PROFILE_ROLES, VALID_GRADES, type Profile } from "@/lib/user-types";
@@ -13,15 +13,15 @@ const EMPTY_PROFILE: Profile = { role: null, gradeInterest: null, school: null, 
 
 /** GET /api/user/profile — the logged-in user's profile row. */
 export async function GET() {
-  const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   try {
     const supabase = createServerClient();
     const { data, error } = await supabase
       .from("profiles")
       .select(PROFILE_COLUMNS)
-      .eq("id", user.userId)
+      .eq("id", userId)
       .maybeSingle();
     if (error) return serverError("GET", error);
     return NextResponse.json(data ? toProfile(data) : EMPTY_PROFILE);
@@ -74,8 +74,8 @@ function parseProfilePatch(
 
 /** PATCH /api/user/profile — update the logged-in user's role/gradeInterest/school/district. */
 export async function PATCH(request: NextRequest) {
-  const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   let body: unknown;
   try {
@@ -92,7 +92,7 @@ export async function PATCH(request: NextRequest) {
     const { data, error } = await supabase
       .from("profiles")
       .update(patch)
-      .eq("id", user.userId)
+      .eq("id", userId)
       .select(PROFILE_COLUMNS)
       .maybeSingle();
     if (error) return serverError("PATCH", error);
@@ -101,7 +101,7 @@ export async function PATCH(request: NextRequest) {
       // Self-healing fallback: the signup trigger should have created this row already.
       const { data: upserted, error: upsertError } = await supabase
         .from("profiles")
-        .upsert({ id: user.userId, ...patch }, { onConflict: "id" })
+        .upsert({ id: userId, ...patch }, { onConflict: "id" })
         .select(PROFILE_COLUMNS)
         .single();
       if (upsertError) return serverError("PATCH upsert fallback", upsertError);
