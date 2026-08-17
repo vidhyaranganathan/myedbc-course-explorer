@@ -3,6 +3,7 @@ import { getSessionUserId } from "@/lib/auth";
 import { createServerClient } from "@/lib/supabase-server";
 import { FILTER_SET_COLUMNS, toSavedFilterSet } from "@/lib/user-mapper";
 import type { Filters } from "@/lib/search";
+import type { SavedFilterSetDbRow } from "@/lib/user-types";
 
 function serverError(context: string, err: unknown): NextResponse {
   console.error(`[api/user/filters] ${context}:`, err);
@@ -65,25 +66,24 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClient();
 
     if (isDefault) {
-      const { error: clearError } = await supabase
-        .from("saved_filter_sets")
-        .update({ is_default: false })
-        .eq("user_id", userId)
-        .eq("is_default", true);
-      if (clearError) return serverError("POST clear old default", clearError);
+      const { data, error } = (await supabase
+        .rpc("insert_default_filter_set", { p_user_id: userId, p_name: name, p_filters: b.filters })
+        .maybeSingle()) as { data: SavedFilterSetDbRow | null; error: { message: string } | null };
+      if (error) {
+        if (error.message.includes("one_default_per_user")) {
+          return NextResponse.json({ error: "conflict, please retry" }, { status: 409 });
+        }
+        return serverError("POST insert", error);
+      }
+      return NextResponse.json(toSavedFilterSet(data!), { status: 201 });
     }
 
     const { data, error } = await supabase
       .from("saved_filter_sets")
-      .insert({ user_id: userId, name, filters: b.filters, is_default: isDefault })
+      .insert({ user_id: userId, name, filters: b.filters, is_default: false })
       .select(FILTER_SET_COLUMNS)
       .single();
-    if (error) {
-      if (error.message.includes("one_default_per_user")) {
-        return NextResponse.json({ error: "conflict, please retry" }, { status: 409 });
-      }
-      return serverError("POST insert", error);
-    }
+    if (error) return serverError("POST insert", error);
     return NextResponse.json(toSavedFilterSet(data), { status: 201 });
   } catch (err) {
     return serverError("POST", err);

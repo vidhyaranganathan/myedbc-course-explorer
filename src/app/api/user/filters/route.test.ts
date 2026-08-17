@@ -10,13 +10,12 @@ import { getSessionUserId } from "@/lib/auth";
 import { GET, POST } from "./route";
 
 type Result = { data?: unknown; error: { message: string } | null };
-type UpdateCall = { patch: object };
+type RpcCall = { fn: string; args: object };
 
 interface Builder {
   select: () => Builder;
   eq: (col: string, val: unknown) => Builder;
   order: () => Builder;
-  update: (patch: object) => Builder;
   insert: (row: object) => Builder;
   single: () => Promise<Result>;
   then: (res: (v: Result) => unknown, rej?: (e: unknown) => unknown) => Promise<unknown>;
@@ -25,25 +24,31 @@ interface Builder {
 function mockSupabase(
   listResult: Result,
   insertResult?: Result,
-  updateCalls?: UpdateCall[]
+  rpcResult?: Result,
+  rpcCalls?: RpcCall[]
 ): SupabaseClient {
   const builder: Builder = {
     select: () => builder,
     eq: () => builder,
     order: () => builder,
-    update: (patch) => {
-      updateCalls?.push({ patch });
-      return builder;
-    },
     insert: () => builder,
     single: () => Promise.resolve(insertResult ?? listResult),
     then: (res, rej) => Promise.resolve(listResult).then(res, rej),
   };
-  return { from: () => builder } as unknown as SupabaseClient;
+  const rpc = (fn: string, args: object) => {
+    rpcCalls?.push({ fn, args });
+    return { maybeSingle: () => Promise.resolve(rpcResult ?? insertResult ?? listResult) };
+  };
+  return { from: () => builder, rpc } as unknown as SupabaseClient;
 }
 
-function setClient(listResult: Result, insertResult?: Result, updateCalls?: UpdateCall[]) {
-  vi.mocked(createServerClient).mockReturnValue(mockSupabase(listResult, insertResult, updateCalls));
+function setClient(
+  listResult: Result,
+  insertResult?: Result,
+  rpcResult?: Result,
+  rpcCalls?: RpcCall[]
+) {
+  vi.mocked(createServerClient).mockReturnValue(mockSupabase(listResult, insertResult, rpcResult, rpcCalls));
 }
 
 function postReq(body: unknown) {
@@ -127,38 +132,45 @@ describe("POST /api/user/filters", () => {
     expect(res.status).toBe(400);
   });
 
-  it("creates a non-default set without clearing any existing default", async () => {
+  it("creates a non-default set via a plain insert, not the atomic RPC", async () => {
     vi.mocked(getSessionUserId).mockResolvedValue("u1");
-    const updateCalls: UpdateCall[] = [];
+    const rpcCalls: RpcCall[] = [];
     setClient(
       { data: null, error: null },
       { data: { id: "1", name: "X", is_default: false, filters: validFilters, created_at: "t1", updated_at: "t1" }, error: null },
-      updateCalls
+      undefined,
+      rpcCalls
     );
     const res = await POST(postReq({ name: "X", filters: validFilters }));
     expect(res.status).toBe(201);
-    expect(updateCalls).toHaveLength(0);
+    expect(rpcCalls).toHaveLength(0);
     expect(await res.json()).toEqual({ id: "1", name: "X", isDefault: false, filters: validFilters, createdAt: "t1", updatedAt: "t1" });
   });
 
-  it("clears the old default before inserting when isDefault is true", async () => {
+  it("inserts atomically via insert_default_filter_set when isDefault is true", async () => {
     vi.mocked(getSessionUserId).mockResolvedValue("u1");
-    const updateCalls: UpdateCall[] = [];
+    const rpcCalls: RpcCall[] = [];
     setClient(
       { data: null, error: null },
+      undefined,
       { data: { id: "2", name: "Y", is_default: true, filters: validFilters, created_at: "t1", updated_at: "t1" }, error: null },
-      updateCalls
+      rpcCalls
     );
     const res = await POST(postReq({ name: "Y", filters: validFilters, isDefault: true }));
     expect(res.status).toBe(201);
-    expect(updateCalls).toHaveLength(1);
-    expect(updateCalls[0].patch).toEqual({ is_default: false });
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0]).toEqual({
+      fn: "insert_default_filter_set",
+      args: { p_user_id: "u1", p_name: "Y", p_filters: validFilters },
+    });
+    expect(await res.json()).toEqual({ id: "2", name: "Y", isDefault: true, filters: validFilters, createdAt: "t1", updatedAt: "t1" });
   });
 
   it("returns 409 on a unique-violation race for the default index", async () => {
     vi.mocked(getSessionUserId).mockResolvedValue("u1");
     setClient(
       { data: null, error: null },
+      undefined,
       { data: null, error: { message: 'duplicate key value violates unique constraint "one_default_per_user"' } }
     );
     const res = await POST(postReq({ name: "Y", filters: validFilters, isDefault: true }));
