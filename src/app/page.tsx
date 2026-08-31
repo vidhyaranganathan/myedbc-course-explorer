@@ -88,9 +88,12 @@ export default function Home() {
 
   function upsertSavedSet(set: SavedFilterSet) {
     setSavedSets((cur) => {
-      const idx = cur.findIndex((s) => s.id === set.id);
-      if (idx === -1) return [...cur, set];
-      const next = [...cur];
+      const withoutStaleDefault = set.isDefault
+        ? cur.map((s) => (s.id === set.id ? s : { ...s, isDefault: false }))
+        : cur;
+      const idx = withoutStaleDefault.findIndex((s) => s.id === set.id);
+      if (idx === -1) return [...withoutStaleDefault, set];
+      const next = [...withoutStaleDefault];
       next[idx] = set;
       return next;
     });

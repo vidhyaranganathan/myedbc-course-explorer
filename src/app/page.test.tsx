@@ -521,6 +521,50 @@ describe("Home page — active filter set indicator", () => {
     expect(await screen.findByText("Viewing: My Other Set")).toBeInTheDocument();
     expect(screen.queryByText("Default")).not.toBeInTheDocument();
   });
+
+  it("un-flags the previous default set in local state once another set becomes default", async () => {
+    const GRADE_11_DEFAULT = {
+      id: "set-1",
+      name: "My Grade 11 Set",
+      isDefault: true,
+      filters: { query: "", grades: ["11"], categories: [], languages: [], subjects: [], credits: [] },
+      createdAt: "t1",
+      updatedAt: "t1",
+    };
+    const GRADE_10_SET = {
+      id: "set-2",
+      name: "My Grade 10 Set",
+      isDefault: false,
+      filters: { query: "", grades: ["10"], categories: [], languages: [], subjects: [], credits: [] },
+      createdAt: "t1",
+      updatedAt: "t1",
+    };
+    await renderLoggedIn([GRADE_11_DEFAULT, GRADE_10_SET]);
+    // Auto-loads the default (grades: ["11"]) on mount.
+    await waitFor(() => {
+      expect(screen.getByText("Viewing: My Grade 11 Set")).toBeInTheDocument();
+      expect(screen.getByText("Default")).toBeInTheDocument();
+    });
+
+    // Switch to the filters that match the non-default set and make it the new default.
+    fireEvent.click(screen.getByRole("button", { name: "Grade 11" })); // clear grade 11
+    fireEvent.click(screen.getByRole("button", { name: "Grade 10" }));
+    await screen.findByText("Viewing: My Grade 10 Set");
+
+    fireEvent.click(screen.getByRole("button", { name: /save filters/i }));
+    fireEvent.change(screen.getByPlaceholderText(/grade 11 science french/i), { target: { value: "My Grade 10 Set" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText(/This matches your saved filter/);
+    fireEvent.click(screen.getByRole("checkbox", { name: /make this my default/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Rename existing" }));
+    await screen.findByText("Saved");
+
+    // Switch back to the filters that match the old default — it must no longer read as Default.
+    fireEvent.click(screen.getByRole("button", { name: "Grade 10" }));
+    fireEvent.click(screen.getByRole("button", { name: "Grade 11" }));
+    await screen.findByText("Viewing: My Grade 11 Set");
+    expect(screen.queryByText("Default")).not.toBeInTheDocument();
+  });
 });
 
 describe("Home page — duplicate filter set on save", () => {
