@@ -3,6 +3,7 @@ import { getSessionUserId } from "@/lib/auth";
 import { createServerClient } from "@/lib/supabase-server";
 import { FILTER_SET_COLUMNS, toSavedFilterSet } from "@/lib/user-mapper";
 import type { Filters } from "@/lib/search";
+import type { SavedFilterSetDbRow } from "@/lib/user-types";
 
 function serverError(context: string, err: unknown): NextResponse {
   console.error(`[api/user/filters/[id]] ${context}:`, err);
@@ -68,12 +69,22 @@ export async function PATCH(
     if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
 
     if (patch.is_default === true) {
-      const { error: clearError } = await supabase
-        .from("saved_filter_sets")
-        .update({ is_default: false })
-        .eq("user_id", userId)
-        .eq("is_default", true);
-      if (clearError) return serverError("PATCH clear old default", clearError);
+      const { data, error } = (await supabase
+        .rpc("set_default_filter_set", {
+          p_user_id: userId,
+          p_id: id,
+          p_name: patch.name ?? null,
+          p_filters: patch.filters ?? null,
+        })
+        .maybeSingle()) as { data: SavedFilterSetDbRow | null; error: { message: string } | null };
+      if (error) {
+        if (error.message.includes("one_default_per_user")) {
+          return NextResponse.json({ error: "conflict, please retry" }, { status: 409 });
+        }
+        return serverError("PATCH update", error);
+      }
+      if (!data) return NextResponse.json({ error: "not found" }, { status: 404 });
+      return NextResponse.json(toSavedFilterSet(data));
     }
 
     const { data, error } = await supabase
@@ -83,12 +94,7 @@ export async function PATCH(
       .eq("user_id", userId)
       .select(FILTER_SET_COLUMNS)
       .single();
-    if (error) {
-      if (error.message.includes("one_default_per_user")) {
-        return NextResponse.json({ error: "conflict, please retry" }, { status: 409 });
-      }
-      return serverError("PATCH update", error);
-    }
+    if (error) return serverError("PATCH update", error);
     return NextResponse.json(toSavedFilterSet(data));
   } catch (err) {
     return serverError("PATCH", err);

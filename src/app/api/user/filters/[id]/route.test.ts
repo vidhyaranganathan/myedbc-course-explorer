@@ -10,7 +10,7 @@ import { getSessionUserId } from "@/lib/auth";
 import { PATCH, DELETE } from "./route";
 
 type Result = { data?: unknown; error: { message: string } | null };
-type UpdateCall = { patch: object };
+type RpcCall = { fn: string; args: object };
 
 interface Builder {
   select: () => Builder;
@@ -24,30 +24,30 @@ interface Builder {
 function mockSupabase(opts: {
   existing: Result;
   finalResult?: Result;
-  updateCalls?: UpdateCall[];
+  rpcResult?: Result;
+  rpcCalls?: RpcCall[];
 }): SupabaseClient {
-  let updateCallCount = 0;
   const builder: Builder = {
     select: () => builder,
     eq: () => builder,
-    update: (patch) => {
-      opts.updateCalls?.push({ patch });
-      updateCallCount++;
-      return builder;
-    },
+    update: () => builder,
     delete: () => builder,
-    maybeSingle: () => {
-      // First maybeSingle call is the ownership check; subsequent calls (e.g. the
-      // "clear old default" update) don't call maybeSingle, so this always serves
-      // either the ownership check or a DELETE's final maybeSingle.
-      return Promise.resolve(updateCallCount > 0 && opts.finalResult ? opts.finalResult : opts.existing);
-    },
+    maybeSingle: () => Promise.resolve(opts.existing),
     single: () => Promise.resolve(opts.finalResult ?? opts.existing),
   };
-  return { from: () => builder } as unknown as SupabaseClient;
+  const rpc = (fn: string, args: object) => {
+    opts.rpcCalls?.push({ fn, args });
+    return { maybeSingle: () => Promise.resolve(opts.rpcResult ?? opts.finalResult ?? opts.existing) };
+  };
+  return { from: () => builder, rpc } as unknown as SupabaseClient;
 }
 
-function setClient(opts: { existing: Result; finalResult?: Result; updateCalls?: UpdateCall[] }) {
+function setClient(opts: {
+  existing: Result;
+  finalResult?: Result;
+  rpcResult?: Result;
+  rpcCalls?: RpcCall[];
+}) {
   vi.mocked(createServerClient).mockReturnValue(mockSupabase(opts));
 }
 
@@ -111,17 +111,42 @@ describe("PATCH /api/user/filters/[id]", () => {
     expect(await res.json()).toEqual({ id: "abc", name: "New name", isDefault: false, filters: validFilters, createdAt: "t1", updatedAt: "t2" });
   });
 
-  it("clears the old default before setting isDefault true", async () => {
+  it("sets the default atomically via set_default_filter_set when isDefault is true", async () => {
     vi.mocked(getSessionUserId).mockResolvedValue("u1");
-    const updateCalls: UpdateCall[] = [];
+    const rpcCalls: RpcCall[] = [];
     setClient({
       existing: { data: { id: "abc" }, error: null },
-      finalResult: { data: { id: "abc", name: "X", is_default: true, filters: validFilters, created_at: "t1", updated_at: "t2" }, error: null },
-      updateCalls,
+      rpcResult: { data: { id: "abc", name: "X", is_default: true, filters: validFilters, created_at: "t1", updated_at: "t2" }, error: null },
+      rpcCalls,
     });
     const res = await PATCH(patchReq({ isDefault: true }), ctx());
     expect(res.status).toBe(200);
-    expect(updateCalls[0].patch).toEqual({ is_default: false });
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0]).toEqual({
+      fn: "set_default_filter_set",
+      args: { p_user_id: "u1", p_id: "abc", p_name: null, p_filters: null },
+    });
+    expect(await res.json()).toEqual({ id: "abc", name: "X", isDefault: true, filters: validFilters, createdAt: "t1", updatedAt: "t2" });
+  });
+
+  it("returns 404 when set_default_filter_set finds no owned row", async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue("u1");
+    setClient({
+      existing: { data: { id: "abc" }, error: null },
+      rpcResult: { data: null, error: null },
+    });
+    const res = await PATCH(patchReq({ isDefault: true }), ctx());
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 409 on a unique-violation race when setting the default", async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue("u1");
+    setClient({
+      existing: { data: { id: "abc" }, error: null },
+      rpcResult: { data: null, error: { message: 'duplicate key value violates unique constraint "one_default_per_user"' } },
+    });
+    const res = await PATCH(patchReq({ isDefault: true }), ctx());
+    expect(res.status).toBe(409);
   });
 
   it("returns a generic 500 on a DB error during update", async () => {

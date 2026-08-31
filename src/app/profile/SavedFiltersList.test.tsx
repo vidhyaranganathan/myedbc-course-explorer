@@ -40,7 +40,7 @@ describe("SavedFiltersList", () => {
   });
 
   it("renames a set", async () => {
-    const fetchMock = vi.fn(() => okJson(set({ name: "New Name" })));
+    const fetchMock = vi.fn<typeof fetch>(() => okJson(set({ name: "New Name" })));
     global.fetch = fetchMock as unknown as typeof fetch;
 
     render(<SavedFiltersList initialSets={[set()]} />);
@@ -67,7 +67,7 @@ describe("SavedFiltersList", () => {
   });
 
   it("sets a set as default", async () => {
-    const fetchMock = vi.fn(() => okJson(set({ isDefault: true })));
+    const fetchMock = vi.fn<typeof fetch>(() => okJson(set({ isDefault: true })));
     global.fetch = fetchMock as unknown as typeof fetch;
 
     render(<SavedFiltersList initialSets={[set()]} />);
@@ -122,8 +122,8 @@ describe("SavedFiltersList", () => {
     global.fetch = fetchMock as unknown as typeof fetch;
 
     render(<SavedFiltersList initialSets={[set({ id: "s1", name: "Set One" }), set({ id: "s2", name: "Set Two" })]} />);
-    const rowOne = screen.getByText("Set One").closest("div.border")!;
-    const rowTwo = screen.getByText("Set Two").closest("div.border")!;
+    const rowOne = screen.getByText("Set One").closest("div.border") as HTMLElement;
+    const rowTwo = screen.getByText("Set Two").closest("div.border") as HTMLElement;
 
     fireEvent.click(within(rowOne).getByRole("button", { name: "Set default" }));
     await screen.findByText("not found");

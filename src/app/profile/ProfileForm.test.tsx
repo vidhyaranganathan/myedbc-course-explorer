@@ -30,7 +30,7 @@ describe("ProfileForm", () => {
   });
 
   it("saves edited fields and shows a success confirmation", async () => {
-    const fetchMock = vi.fn(() => okJson({ role: "student", gradeInterest: [10], school: "New School", district: null }));
+    const fetchMock = vi.fn<typeof fetch>(() => okJson({ role: "student", gradeInterest: [10], school: "New School", district: null }));
     global.fetch = fetchMock as unknown as typeof fetch;
 
     render(<ProfileForm initialProfile={EMPTY} />);
@@ -74,7 +74,7 @@ describe("ProfileForm", () => {
   });
 
   it("clears fields to null when emptied", async () => {
-    const fetchMock = vi.fn(() => okJson(EMPTY));
+    const fetchMock = vi.fn<typeof fetch>(() => okJson(EMPTY));
     global.fetch = fetchMock as unknown as typeof fetch;
 
     render(<ProfileForm initialProfile={{ role: "teacher", gradeInterest: [10], school: "X", district: "Y" }} />);

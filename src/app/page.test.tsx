@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, within, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, within, cleanup, waitFor } from "@testing-library/react";
 import type { CourseListItem } from "@/lib/types";
+import type { SavedFilterSet } from "@/lib/user-types";
 import Home from "./page";
 
 const LIST: CourseListItem[] = [
@@ -369,11 +370,21 @@ const SAVED_SETS = [
   },
 ];
 
-async function renderLoggedIn(sets: unknown[] = []) {
+async function renderLoggedIn(sets: SavedFilterSet[] = []) {
   cleanup();
-  const fetchFn = installFetch((url: string) => {
+  const fetchFn = installFetch((url: string, init?: RequestInit) => {
     if (url === "/api/courses") return okJson(LIST);
     if (url === "/api/auth/me") return okJson({ email: "user@example.com", isSignedIn: true });
+    if (url === "/api/user/filters" && init?.method === "POST") {
+      const body = JSON.parse(String(init.body));
+      return okJson({ id: "new-set", name: body.name, isDefault: !!body.isDefault, filters: body.filters, createdAt: "t1", updatedAt: "t1" });
+    }
+    if (url.startsWith("/api/user/filters/") && init?.method === "PATCH") {
+      const id = url.split("/").pop();
+      const existing = sets.find((s) => s.id === id);
+      const body = JSON.parse(String(init.body));
+      return okJson({ ...existing, ...body });
+    }
     if (url === "/api/user/filters") return okJson(sets);
     return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
   });
@@ -444,13 +455,270 @@ describe("Home page — save filters (logged in)", () => {
 describe("Home page — loading saved filter sets", () => {
   it("auto-loads the default filter set on mount when logged in", async () => {
     await renderLoggedIn(SAVED_SETS);
-    expect(await screen.findByText("Science 11")).toBeInTheDocument();
-    expect(screen.queryByText("Mathematics 10")).not.toBeInTheDocument();
+    // "Science 11" alone isn't proof — it's also in the unfiltered list — so wait
+    // for the conjunction with "Mathematics 10" gone, not a snapshot after a
+    // single findByText (see TD-022 follow-up).
+    await waitFor(() => {
+      expect(screen.getByText("Science 11")).toBeInTheDocument();
+      expect(screen.queryByText("Mathematics 10")).not.toBeInTheDocument();
+    });
   });
 
   it("does not fetch saved filter sets when logged out", async () => {
     const fetchFn = await renderLoaded();
     const filterSetCalls = fetchFn.mock.calls.filter((c) => c[0] === "/api/user/filters");
     expect(filterSetCalls).toHaveLength(0);
+  });
+});
+
+describe("Home page — active filter set indicator", () => {
+  it("shows Viewing: <name> when the current filters match a saved set", async () => {
+    await renderLoggedIn(SAVED_SETS);
+    await screen.findByText("Science 11");
+    expect(screen.getByText("Viewing: My Grade 11 Set")).toBeInTheDocument();
+  });
+
+  it("hides the indicator once the filters no longer match the saved set", async () => {
+    await renderLoggedIn(SAVED_SETS);
+    await screen.findByText("Science 11");
+    expect(screen.getByText("Viewing: My Grade 11 Set")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /clear all filters/i }));
+    expect(screen.queryByText(/^Viewing:/)).not.toBeInTheDocument();
+  });
+
+  it("shows no indicator when the current filters don't match any saved set", async () => {
+    await renderLoggedIn(SAVED_SETS);
+    await screen.findByText("Science 11");
+    fireEvent.click(screen.getByRole("button", { name: /clear all filters/i }));
+    fireEvent.change(screen.getByPlaceholderText("Search by course title, code, or subject..."), {
+      target: { value: "math" },
+    });
+    expect(screen.queryByText(/^Viewing:/)).not.toBeInTheDocument();
+  });
+
+  it("tags the indicator as Default when the active set is the default", async () => {
+    await renderLoggedIn(SAVED_SETS);
+    await waitFor(() => {
+      expect(screen.getByText("Science 11")).toBeInTheDocument();
+      expect(screen.queryByText("Mathematics 10")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("Viewing: My Grade 11 Set")).toBeInTheDocument();
+    expect(screen.getByText("Default")).toBeInTheDocument();
+  });
+
+  it("does not tag the indicator as Default for a non-default set", async () => {
+    const NON_DEFAULT_SET = {
+      id: "set-2",
+      name: "My Other Set",
+      isDefault: false,
+      filters: { query: "", grades: ["11"], categories: [], languages: [], subjects: [], credits: [] },
+      createdAt: "t1",
+      updatedAt: "t1",
+    };
+    await renderLoggedIn([NON_DEFAULT_SET]);
+    fireEvent.click(screen.getByRole("button", { name: "Grade 11" }));
+    expect(await screen.findByText("Viewing: My Other Set")).toBeInTheDocument();
+    expect(screen.queryByText("Default")).not.toBeInTheDocument();
+  });
+
+  it("un-flags the previous default set in local state once another set becomes default", async () => {
+    const GRADE_11_DEFAULT = {
+      id: "set-1",
+      name: "My Grade 11 Set",
+      isDefault: true,
+      filters: { query: "", grades: ["11"], categories: [], languages: [], subjects: [], credits: [] },
+      createdAt: "t1",
+      updatedAt: "t1",
+    };
+    const GRADE_10_SET = {
+      id: "set-2",
+      name: "My Grade 10 Set",
+      isDefault: false,
+      filters: { query: "", grades: ["10"], categories: [], languages: [], subjects: [], credits: [] },
+      createdAt: "t1",
+      updatedAt: "t1",
+    };
+    await renderLoggedIn([GRADE_11_DEFAULT, GRADE_10_SET]);
+    // Auto-loads the default (grades: ["11"]) on mount.
+    await waitFor(() => {
+      expect(screen.getByText("Viewing: My Grade 11 Set")).toBeInTheDocument();
+      expect(screen.getByText("Default")).toBeInTheDocument();
+    });
+
+    // Switch to the filters that match the non-default set and make it the new default.
+    fireEvent.click(screen.getByRole("button", { name: "Grade 11" })); // clear grade 11
+    fireEvent.click(screen.getByRole("button", { name: "Grade 10" }));
+    await screen.findByText("Viewing: My Grade 10 Set");
+
+    fireEvent.click(screen.getByRole("button", { name: /save filters/i }));
+    fireEvent.change(screen.getByPlaceholderText(/grade 11 science french/i), { target: { value: "My Grade 10 Set" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText(/This matches your saved filter/);
+    fireEvent.click(screen.getByRole("checkbox", { name: /make this my default/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Rename existing" }));
+    await screen.findByText("Saved");
+
+    // Switch back to the filters that match the old default — it must no longer read as Default.
+    fireEvent.click(screen.getByRole("button", { name: "Grade 10" }));
+    fireEvent.click(screen.getByRole("button", { name: "Grade 11" }));
+    await screen.findByText("Viewing: My Grade 11 Set");
+    expect(screen.queryByText("Default")).not.toBeInTheDocument();
+  });
+});
+
+describe("Home page — duplicate filter set on save", () => {
+  const MATH_SET: SavedFilterSet = {
+    id: "m1",
+    name: "My Math Set",
+    isDefault: false,
+    filters: { query: "math", grades: [], categories: [], languages: [], subjects: [], credits: [] },
+    createdAt: "t1",
+    updatedAt: "t1",
+  };
+
+  async function openSaveWithMatchingFilters(newName: string) {
+    await renderLoggedIn([MATH_SET]);
+    await screen.findByText("Mathematics 10");
+    fireEvent.change(screen.getByPlaceholderText("Search by course title, code, or subject..."), {
+      target: { value: "math" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save filters/i }));
+    fireEvent.change(screen.getByPlaceholderText(/grade 11 science french/i), { target: { value: newName } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  }
+
+  it("prompts to rename the existing set instead of silently duplicating", async () => {
+    await openSaveWithMatchingFilters("Another Name");
+    const prompt = await screen.findByText(/This matches your saved filter/);
+    expect(prompt.textContent).toContain("My Math Set");
+    expect(prompt.textContent).toContain("Another Name");
+  });
+
+  it("renames the existing set when the user confirms", async () => {
+    const fetchFn = installFetch((url: string, init?: RequestInit) => {
+      if (url === "/api/courses") return okJson(LIST);
+      if (url === "/api/auth/me") return okJson({ email: "user@example.com", isSignedIn: true });
+      if (url === "/api/user/filters/m1" && init?.method === "PATCH") {
+        const body = JSON.parse(String(init.body));
+        return okJson({ ...MATH_SET, ...body });
+      }
+      if (url === "/api/user/filters") return okJson([MATH_SET]);
+      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
+    });
+    render(<Home />);
+    await screen.findByText("Mathematics 10");
+    fireEvent.change(screen.getByPlaceholderText("Search by course title, code, or subject..."), {
+      target: { value: "math" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save filters/i }));
+    fireEvent.change(screen.getByPlaceholderText(/grade 11 science french/i), { target: { value: "Another Name" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText(/This matches your saved filter/);
+
+    fireEvent.click(screen.getByRole("button", { name: "Rename existing" }));
+    await screen.findByText("Saved");
+
+    const patchCall = fetchFn.mock.calls.find(
+      (c) => c[0] === "/api/user/filters/m1" && c[1]?.method === "PATCH"
+    );
+    expect(patchCall).toBeTruthy();
+    const body = JSON.parse(patchCall![1]!.body as string);
+    expect(body).toEqual({ name: "Another Name", isDefault: false });
+    expect(screen.getByText("Viewing: Another Name")).toBeInTheDocument();
+  });
+
+  it("saves as a new set when the user declines the rename", async () => {
+    await openSaveWithMatchingFilters("Another Name");
+    await screen.findByText(/This matches your saved filter/);
+
+    const fetchFn = global.fetch as unknown as ReturnType<typeof installFetch>;
+    fireEvent.click(screen.getByRole("button", { name: "Save as new" }));
+    await screen.findByText("Saved");
+
+    const postCall = fetchFn.mock.calls.find(
+      (c) => c[0] === "/api/user/filters" && c[1]?.method === "POST"
+    );
+    expect(postCall).toBeTruthy();
+    const body = JSON.parse(postCall![1]!.body as string);
+    expect(body.name).toBe("Another Name");
+  });
+
+  it("returns to the name field when the duplicate prompt is cancelled", async () => {
+    await openSaveWithMatchingFilters("Another Name");
+    await screen.findByText(/This matches your saved filter/);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByDisplayValue("Another Name")).toBeInTheDocument();
+  });
+
+  it("defaults to retaining default status when renaming the current default set", async () => {
+    const fetchFn = installFetch((url: string, init?: RequestInit) => {
+      if (url === "/api/courses") return okJson(LIST);
+      if (url === "/api/auth/me") return okJson({ email: "user@example.com", isSignedIn: true });
+      if (url === "/api/user/filters/set-1" && init?.method === "PATCH") {
+        const body = JSON.parse(String(init.body));
+        return okJson({ ...SAVED_SETS[0], ...body });
+      }
+      if (url === "/api/user/filters") return okJson(SAVED_SETS);
+      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
+    });
+    render(<Home />);
+    // Auto-loads the default set (grades: ["11"]) on mount. "Science 11" alone isn't
+    // proof — it's also in the unfiltered list — so also wait out "Mathematics 10".
+    await waitFor(() => {
+      expect(screen.getByText("Science 11")).toBeInTheDocument();
+      expect(screen.queryByText("Mathematics 10")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /save filters/i }));
+    fireEvent.change(screen.getByPlaceholderText(/grade 11 science french/i), { target: { value: "Renamed Grade 11 Set" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await screen.findByText(/This matches your saved filter/);
+    const keepDefaultCheckbox = screen.getByRole("checkbox", { name: /keep this as my default filter set/i });
+    expect(keepDefaultCheckbox).toBeChecked();
+
+    fireEvent.click(screen.getByRole("button", { name: "Rename existing" }));
+    await screen.findByText("Saved");
+
+    const patchCall = fetchFn.mock.calls.find(
+      (c) => c[0] === "/api/user/filters/set-1" && c[1]?.method === "PATCH"
+    );
+    expect(patchCall).toBeTruthy();
+    const body = JSON.parse(patchCall![1]!.body as string);
+    expect(body).toEqual({ name: "Renamed Grade 11 Set", isDefault: true });
+  });
+
+  it("lets the user opt out of retaining default status when renaming", async () => {
+    const fetchFn = installFetch((url: string, init?: RequestInit) => {
+      if (url === "/api/courses") return okJson(LIST);
+      if (url === "/api/auth/me") return okJson({ email: "user@example.com", isSignedIn: true });
+      if (url === "/api/user/filters/set-1" && init?.method === "PATCH") {
+        const body = JSON.parse(String(init.body));
+        return okJson({ ...SAVED_SETS[0], ...body });
+      }
+      if (url === "/api/user/filters") return okJson(SAVED_SETS);
+      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
+    });
+    render(<Home />);
+    await waitFor(() => {
+      expect(screen.getByText("Science 11")).toBeInTheDocument();
+      expect(screen.queryByText("Mathematics 10")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /save filters/i }));
+    fireEvent.change(screen.getByPlaceholderText(/grade 11 science french/i), { target: { value: "Renamed Grade 11 Set" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText(/This matches your saved filter/);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /keep this as my default filter set/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Rename existing" }));
+    await screen.findByText("Saved");
+
+    const patchCall = fetchFn.mock.calls.find(
+      (c) => c[0] === "/api/user/filters/set-1" && c[1]?.method === "PATCH"
+    );
+    const body = JSON.parse(patchCall![1]!.body as string);
+    expect(body).toEqual({ name: "Renamed Grade 11 Set", isDefault: false });
   });
 });

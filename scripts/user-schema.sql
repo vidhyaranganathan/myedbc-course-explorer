@@ -86,6 +86,71 @@ CREATE TRIGGER saved_filter_sets_updated_at
 -- to hang one off (ADR-010). A profiles row is created lazily by the
 -- self-healing upsert in PATCH /api/user/profile on first save instead.
 
+-- ── atomic default-filter-set functions (TD-023) ────────────────
+-- Both functions clear the old default and set the new one inside a single
+-- function call (one Supabase RPC round trip = one transaction), so a
+-- mid-flight failure can never leave a user with zero defaults. The
+-- one_default_per_user partial unique index remains the backstop for
+-- genuinely concurrent requests (the route handlers turn its violation
+-- into a 409 for the client to retry).
+--
+-- p_user_id is TEXT (a Clerk id like "user_2abc...") — not uuid — since
+-- saved_filter_sets.user_id is TEXT post-Clerk-migration (ADR-010).
+--
+-- After running this in the SQL Editor, PostgREST's schema cache usually
+-- reloads within seconds. If supabase.rpc(...) 404s immediately after,
+-- run: NOTIFY pgrst, 'reload schema';
+
+CREATE OR REPLACE FUNCTION insert_default_filter_set(
+  p_user_id text,
+  p_name    text,
+  p_filters jsonb
+)
+RETURNS SETOF saved_filter_sets
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  UPDATE public.saved_filter_sets
+     SET is_default = false
+   WHERE user_id = p_user_id AND is_default = true;
+
+  RETURN QUERY
+  INSERT INTO public.saved_filter_sets (user_id, name, is_default, filters)
+  VALUES (p_user_id, p_name, true, p_filters)
+  RETURNING *;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION set_default_filter_set(
+  p_user_id text,
+  p_id      uuid,
+  p_name    text DEFAULT NULL,
+  p_filters jsonb DEFAULT NULL
+)
+RETURNS SETOF saved_filter_sets
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  -- Ownership check: return zero rows (not an error) if the row isn't the
+  -- caller's — the route treats "no row returned" as its existing 404 case.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.saved_filter_sets WHERE id = p_id AND user_id = p_user_id
+  ) THEN
+    RETURN;
+  END IF;
+
+  UPDATE public.saved_filter_sets
+     SET is_default = false
+   WHERE user_id = p_user_id AND is_default = true AND id <> p_id;
+
+  RETURN QUERY
+  UPDATE public.saved_filter_sets
+     SET is_default = true,
+         name       = COALESCE(p_name, name),
+         filters    = COALESCE(p_filters, filters)
+   WHERE id = p_id AND user_id = p_user_id
+   RETURNING *;
+END;
+$$;
+
 -- ── example operations (commented out — for reference) ────────
 -- These run via the service-role client with an explicit Clerk user id
 -- (from getSessionUser()), not as an authenticated Supabase SQL session —
@@ -102,11 +167,8 @@ VALUES (
   '{"grades": ["11"], "languages": ["French"], "categories": [], "subjects": ["Science"], "searchTerm": ""}'
 );
 
--- Set a filter as default (must clear old default first, in a transaction)
-BEGIN;
-  UPDATE saved_filter_sets SET is_default = false WHERE user_id = '<user-id>' AND is_default = true;
-  UPDATE saved_filter_sets SET is_default = true  WHERE id = '<target-id>' AND user_id = '<user-id>';
-COMMIT;
+-- Set a filter as default (atomic — see set_default_filter_set above)
+SELECT * FROM set_default_filter_set('<user-id>', '<target-id>');
 
 -- Load default filter set on page open
 SELECT filters FROM saved_filter_sets
